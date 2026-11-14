@@ -1,0 +1,10 @@
+{
+  "name": "storyweave-ai",
+  "version": "1.0.0",
+  "description": "StoryWeave AI - Persistent Universe Intelligence Writing Studio",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "backend": "python backend/run.py"
+  }
+}
