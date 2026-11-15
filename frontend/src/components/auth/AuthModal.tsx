@@ -2,19 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { sound } from '../../services/audioService';
-import { 
-  X, 
-  Key, 
-  User, 
-  Mail, 
-  Lock, 
-  Eye, 
-  EyeOff, 
-  AlertCircle, 
-  CheckCircle2, 
-  ArrowRight, 
-  ShieldCheck, 
-  Sparkles 
+import {
+  X,
+  Key,
+  User,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  ArrowRight,
+  ShieldCheck,
+  Sparkles
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -156,7 +156,7 @@ export const AuthModal: React.FC = () => {
   };
 
   return (
-    <div 
+    <div
       onClick={handleBackdropClick}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity select-none"
     >
@@ -251,10 +251,10 @@ export const AuthModal: React.FC = () => {
           {authModalMode === 'username_prompt' && (pendingGoogleUser || user) && (
             <div className="flex items-center gap-3 p-2.5 rounded-lg bg-[#231A12] border border-[#3E3123]">
               {(pendingGoogleUser?.photoURL || user?.photoURL) ? (
-                <img 
-                  src={pendingGoogleUser?.photoURL || user?.photoURL || ''} 
-                  alt="Profile" 
-                  className="w-8 h-8 rounded-full border border-[#C49A61]" 
+                <img
+                  src={pendingGoogleUser?.photoURL || user?.photoURL || ''}
+                  alt="Profile"
+                  className="w-8 h-8 rounded-full border border-[#C49A61]"
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-[#C49A61]/20 border border-[#C49A61] flex items-center justify-center text-xs font-bold text-[#E0B77D]">

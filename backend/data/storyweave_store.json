@@ -58,6 +58,299 @@
   "memories": {},
   "plotholes": {},
   "boards": {},
-  "investigation_boards": {},
+  "investigation_boards": {
+    "story_4300846ac6": {
+      "story_id": "story_4300846ac6",
+      "elements": [
+        {
+          "id": "card_case_file_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "clue",
+          "title": "CASE DOSSIER: #6AC6",
+          "subtitle": "INVESTIGATION • MYSTERY",
+          "description": "INQUIRY TARGET: CHOCO\nSTATUS: ACTIVE INVESTIGATION\nSETTING: RAVENSCAR CLIFFSIDE & MARITIME MANOR\nCANON CHAPTERS: 3 LOGGED",
+          "color": "aged",
+          "status": "verified",
+          "is_pinned": true,
+          "position": {
+            "x": 60,
+            "y": 60
+          },
+          "metadata": {
+            "category": "official_record"
+          }
+        },
+        {
+          "id": "card_sticky_surv_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "clue",
+          "title": "24/7 SURVEILLANCE ORDER",
+          "subtitle": "Detective Directives",
+          "description": "Track timeline surrounding the disappearance at Ravenscar Cliffside & Maritime Manor. Cross-reference harbor logs and tide records.",
+          "color": "yellow",
+          "status": "unverified",
+          "is_pinned": false,
+          "position": {
+            "x": 310,
+            "y": 70
+          },
+          "metadata": {
+            "observation": "Surveillance directive"
+          }
+        },
+        {
+          "id": "card_loc_0_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "location",
+          "title": "Ravenscar Cliffside & Maritime Manor",
+          "subtitle": "Location • Chapter 1 - The Unfolding Incident, The Tide-Locked Summons",
+          "description": "An isolated coastal estate perched upon treacherous cliffs, featuring subterranean tide vaults and battered by fierce autumn storms.",
+          "image_url": "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "aged",
+          "position": {
+            "x": 560,
+            "y": 60
+          },
+          "metadata": {
+            "chapters": [
+              "Chapter 1 - The Unfolding Incident",
+              "The Tide-Locked Summons"
+            ],
+            "associated_characters": [
+              "Private Inquiry Agent"
+            ]
+          }
+        },
+        {
+          "id": "card_char_char_34b580",
+          "story_id": "story_4300846ac6",
+          "type": "character",
+          "title": "The Investigator",
+          "subtitle": "Protagonist • Alive",
+          "description": "Subject under investigative inquiry in choco.",
+          "image_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop",
+          "status": "Alive",
+          "is_culprit": false,
+          "is_pinned": false,
+          "color": "polaroid",
+          "position": {
+            "x": 80,
+            "y": 560
+          },
+          "metadata": {
+            "role": "Protagonist",
+            "character_id": "char_34b580",
+            "importance_score": 95,
+            "classifications": [
+              "Protagonist",
+              "Key Character"
+            ],
+            "first_appearance": "Chapter 1",
+            "secrets": ""
+          }
+        },
+        {
+          "id": "card_char_char_6ef2b2",
+          "story_id": "story_4300846ac6",
+          "type": "character",
+          "title": "The Vanished Subject",
+          "subtitle": "Foil / Mystery Inciter • Suspect",
+          "description": "Subject under investigative inquiry in choco.",
+          "image_url": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop",
+          "status": "suspect",
+          "is_culprit": true,
+          "is_pinned": false,
+          "color": "polaroid",
+          "position": {
+            "x": 340,
+            "y": 575
+          },
+          "metadata": {
+            "role": "Foil / Mystery Inciter",
+            "character_id": "char_6ef2b2",
+            "importance_score": 75,
+            "classifications": [
+              "Key Character",
+              "Supporting Character"
+            ],
+            "first_appearance": "Chapter 1",
+            "secrets": ""
+          }
+        },
+        {
+          "id": "card_time_0_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "event",
+          "title": "Ch. 1 • Chapter 1 - The Unfolding Incident",
+          "subtitle": "Timeline Chronology • Chapter 1",
+          "description": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>...",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "manila",
+          "position": {
+            "x": 1160,
+            "y": 80
+          },
+          "metadata": {
+            "chapter_number": 1,
+            "characters_involved": []
+          }
+        },
+        {
+          "id": "card_time_1_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "event",
+          "title": "Ch. 1 • Chapter 1 - The Unfolding Incident",
+          "subtitle": "Timeline Chronology • Chapter 1",
+          "description": "...",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "manila",
+          "position": {
+            "x": 1160,
+            "y": 280
+          },
+          "metadata": {
+            "chapter_number": 1,
+            "characters_involved": []
+          }
+        },
+        {
+          "id": "card_time_2_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "event",
+          "title": "Ch. 1 • The Tide-Locked Summons",
+          "subtitle": "Timeline Chronology • Chapter 1",
+          "description": "The private inquiry agent arrives at the isolated coastal estate during a fierce storm, discovering the study empty with a half-melted cup of dark chocolate on the desk and no footprints in the mud outside.",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "manila",
+          "position": {
+            "x": 1160,
+            "y": 480
+          },
+          "metadata": {
+            "chapter_number": 1,
+            "characters_involved": []
+          }
+        },
+        {
+          "id": "card_ev_0_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "evidence",
+          "title": "Half-Melted Cup of Dark Chocolate",
+          "subtitle": "Evidence • Found in The Tide-Locked Summons",
+          "description": "A cooling, viscous cup of dark chocolate left unattended on the study desk, indicating a sudden and very recent departure.",
+          "image_url": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=800&auto=format&fit=crop",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "aged",
+          "position": {
+            "x": 80,
+            "y": 880
+          },
+          "metadata": {
+            "first_appearance": "The Tide-Locked Summons",
+            "current_location": null,
+            "significance": "Proves the occupant was present moments before the disappearance, matching the mystery's thematic motif.",
+            "reliability": "Physical Evidence"
+          }
+        },
+        {
+          "id": "card_ev_1_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "evidence",
+          "title": "Absence of Footprints",
+          "subtitle": "Evidence • Found in The Tide-Locked Summons",
+          "description": "A complete lack of disturbance in the mud surrounding the coastal estate.",
+          "image_url": "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=800&auto=format&fit=crop",
+          "status": "verified",
+          "is_pinned": false,
+          "color": "aged",
+          "position": {
+            "x": 360,
+            "y": 890
+          },
+          "metadata": {
+            "first_appearance": "The Tide-Locked Summons",
+            "current_location": null,
+            "significance": "Suggests the subject either did not leave via normal exterior paths or vanished impossibly.",
+            "reliability": "Physical Evidence"
+          }
+        },
+        {
+          "id": "card_sticky_0_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "clue",
+          "title": "The Sealed Exit Paradox",
+          "subtitle": "Detective Observation",
+          "description": "Investigative anomaly flagged.",
+          "color": "yellow",
+          "status": "unverified",
+          "is_pinned": false,
+          "position": {
+            "x": 100,
+            "y": 340
+          },
+          "metadata": {
+            "mystery_note": true
+          }
+        },
+        {
+          "id": "card_sticky_1_story_4300846ac6",
+          "story_id": "story_4300846ac6",
+          "type": "clue",
+          "title": "Subterranean Tide Vaults",
+          "subtitle": "Detective Observation",
+          "description": "Investigative anomaly flagged.",
+          "color": "red",
+          "status": "unverified",
+          "is_pinned": false,
+          "position": {
+            "x": 370,
+            "y": 340
+          },
+          "metadata": {
+            "mystery_note": true
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "conn_time_seq_0_story_4300846ac6",
+          "source_id": "card_time_0_story_4300846ac6",
+          "target_id": "card_time_1_story_4300846ac6",
+          "label": "Chronological progression",
+          "type": "timeline",
+          "notes": "Sequential narrative milestones."
+        },
+        {
+          "id": "conn_time_seq_1_story_4300846ac6",
+          "source_id": "card_time_1_story_4300846ac6",
+          "target_id": "card_time_2_story_4300846ac6",
+          "label": "Chronological progression",
+          "type": "timeline",
+          "notes": "Sequential narrative milestones."
+        },
+        {
+          "id": "conn_time_ev_story_4300846ac6",
+          "source_id": "card_time_0_story_4300846ac6",
+          "target_id": "card_ev_0_story_4300846ac6",
+          "label": "Timepiece recovered at scene",
+          "type": "timeline",
+          "notes": "Anchor timestamp for narrative chronology."
+        }
+      ],
+      "culprit_id": "card_char_char_6ef2b2",
+      "zoom": 1.0,
+      "pan_offset": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "updated_at": "2026-11-15T19:27:24.404413"
+    }
+  },
   "culprits": {}
 }

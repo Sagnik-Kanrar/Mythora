@@ -89,6 +89,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     const camera = new THREE.PerspectiveCamera(initialFov, width / height, 0.1, 100);
     camera.position.set(3.6, 2.15, 7.4);
     camera.lookAt(-1.4, 0.05, -0.6);
+    camera.updateMatrixWorld(true);
 
     // Renderer
     let renderer: THREE.WebGLRenderer;
@@ -218,8 +219,6 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       vy: number;
       z: number;
       vz: number;
-      screenX: number;
-      screenY: number;
     }
 
     const books: BookItem[] = [];
@@ -289,25 +288,11 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         y: -3,
         vy: 0,
         z: 0,
-        vz: 0,
-        screenX: 0,
-        screenY: 0
+        vz: 0
       });
     });
 
     const tempVec = new THREE.Vector3();
-
-    // Precalculate screen coordinates once to avoid 32 per-frame matrix inversions/projections
-    const updateBookScreenPoints = () => {
-      books.forEach(b => {
-        tempVec.set(0, 0.1, 0);
-        b.group.localToWorld(tempVec);
-        tempVec.project(camera);
-        b.screenX = (tempVec.x * 0.5 + 0.5) * width;
-        b.screenY = (-tempVec.y * 0.5 + 0.5) * height;
-      });
-    };
-    updateBookScreenPoints();
 
     // Texture Sheets loader
     const sheetA_URL = 'https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261030_003447_7862e2d0-751c-4d7c-9c8a-e682415d908f.png&w=2336&q=90';
@@ -345,7 +330,9 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     const isCoarse = window.matchMedia('(pointer: coarse)').matches;
 
     const onPointerMove = (e: PointerEvent) => {
-      // Only track pointer when inside Section 1 hero
+      // Ignore touch gestures to prevent sticky hover states on mobile/touch screens
+      if (e.pointerType === 'touch') return;
+      // Track pointer when inside Section 1 hero
       if (window.scrollY < height) {
         pointerInside = true;
         pointerX = e.clientX;
@@ -385,7 +372,27 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     const K = 70;
     const C = 12.5;
 
-    // Animation loop (High-efficiency precalculated projection loop)
+    function getBookScreenPoint(book: BookItem) {
+      tempVec.set(0, 0.1, 0);
+      book.mesh.localToWorld(tempVec);
+      tempVec.project(camera);
+      return {
+        x: (tempVec.x * 0.5 + 0.5) * width,
+        y: (-tempVec.y * 0.5 + 0.5) * height
+      };
+    }
+
+    function getBookRestingScreenPoint(book: BookItem) {
+      tempVec.set(0, 0.1, 0);
+      book.group.localToWorld(tempVec);
+      tempVec.project(camera);
+      return {
+        x: (tempVec.x * 0.5 + 0.5) * width,
+        y: (-tempVec.y * 0.5 + 0.5) * height
+      };
+    }
+
+    // Animation loop: Real-time dynamic hover & smooth spring physics
     function animate() {
       animationFrameId = requestAnimationFrame(animate);
 
@@ -404,25 +411,24 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
 
       if (isCoarse || isIdle || !pointerInside) {
         waveActive = true;
-        const p29X = books[29]?.screenX || 0;
-        const p29Y = books[29]?.screenY || 0;
-        const p1X = books[1]?.screenX || 0;
-        const p1Y = books[1]?.screenY || 0;
+        const p29 = getBookRestingScreenPoint(books[29]);
+        const p1 = getBookRestingScreenPoint(books[1]);
         const u = (Math.sin(t * 0.45) + 1) / 2;
-        activeX = p29X + (p1X - p29X) * u;
-        activeY = p29Y + (p1Y - p29Y) * u;
+        activeX = p29.x + (p1.x - p29.x) * u;
+        activeY = p29.y + (p1.y - p29.y) * u;
       }
 
       const s = Math.max(width, height) * 0.085;
       const sSq = s * s;
-      const subSteps = 2;
+      const subSteps = 4;
       const h = dt / subSteps;
 
       books.forEach(b => {
+        const screenP = getBookScreenPoint(b);
         let influence = 0;
         if (waveActive) {
-          const dx = b.screenX - activeX;
-          const dy = (b.screenY - activeY) * 0.55;
+          const dx = screenP.x - activeX;
+          const dy = (screenP.y - activeY) * 0.55;
           influence = Math.exp(-(dx * dx + dy * dy) / sSq);
         }
 
@@ -464,10 +470,10 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       camera.fov = (width < height || width <= 760) ? 40 : 19.5;
       camera.updateProjectionMatrix();
       camera.lookAt(-1.4, 0.05, -0.6);
+      camera.updateMatrixWorld(true);
 
       renderer.setSize(width, height);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      updateBookScreenPoints();
     };
 
     window.addEventListener('resize', onResize);

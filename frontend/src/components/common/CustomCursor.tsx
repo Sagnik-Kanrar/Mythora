@@ -201,7 +201,7 @@ export const CustomCursor: React.FC = () => {
         if (computed.cursor === 'pointer') return 'pointer';
         if (computed.cursor === 'not-allowed') return 'disabled';
         if (computed.cursor === 'grab' || computed.cursor === 'grabbing') return 'drag';
-      } catch {}
+      } catch { }
 
       return 'default';
     };
@@ -435,9 +435,8 @@ export const CustomCursor: React.FC = () => {
       {/* Primary Custom Cursor Root */}
       <div
         ref={cursorRef}
-        className={`fixed top-0 left-0 pointer-events-none z-[999999] will-change-transform transition-opacity duration-150 ${
-          isVisible && !isTextState && activeType !== 'hidden' ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`fixed top-0 left-0 pointer-events-none z-[999999] will-change-transform transition-opacity duration-150 ${isVisible && !isTextState && activeType !== 'hidden' ? 'opacity-100' : 'opacity-0'
+          }`}
         style={{
           transform: 'translate3d(-100px, -100px, 0px)',
         }}
@@ -446,11 +445,10 @@ export const CustomCursor: React.FC = () => {
         <div className="relative select-none">
           {/* STATE 1: POINTER CURSOR — GOLDEN POINTING HAND (Image 1) */}
           <div
-            className={`absolute top-0 left-0 transition-all duration-150 ease-out ${
-              isPointerState
-                ? 'opacity-100 scale-100 pointer-events-none'
-                : 'opacity-0 scale-90 pointer-events-none'
-            }`}
+            className={`absolute top-0 left-0 transition-all duration-150 ease-out ${isPointerState
+              ? 'opacity-100 scale-100 pointer-events-none'
+              : 'opacity-0 scale-90 pointer-events-none'
+              }`}
             style={{
               /* Hand hotspot is pointing fingertip: x=26.01%, y=1.25% */
               transform: 'translate(-26%, -1.25%)',
@@ -486,11 +484,10 @@ export const CustomCursor: React.FC = () => {
 
           {/* STATE 2: DEFAULT CURSOR — GOLDEN FOUNTAIN PEN (Image 2) */}
           <div
-            className={`absolute top-0 left-0 transition-all duration-150 ease-out ${
-              !isPointerState
-                ? 'opacity-100 scale-100 pointer-events-none'
-                : 'opacity-0 scale-90 pointer-events-none'
-            }`}
+            className={`absolute top-0 left-0 transition-all duration-150 ease-out ${!isPointerState
+              ? 'opacity-100 scale-100 pointer-events-none'
+              : 'opacity-0 scale-90 pointer-events-none'
+              }`}
             style={{
               /* Fountain pen hotspot is the nib tip: x=5.96%, y=2.89% */
               transform: 'translate(-6%, -3%)',
@@ -499,9 +496,8 @@ export const CustomCursor: React.FC = () => {
             <div className="relative group">
               {/* Subtle Golden Glow behind the Nib */}
               <div
-                className={`absolute inset-0 rounded-full blur-[5px] pointer-events-none transition-opacity duration-200 ${
-                  isDisabledState ? 'opacity-15' : 'opacity-50'
-                }`}
+                className={`absolute inset-0 rounded-full blur-[5px] pointer-events-none transition-opacity duration-200 ${isDisabledState ? 'opacity-15' : 'opacity-50'
+                  }`}
                 style={{
                   background:
                     'radial-gradient(circle at 10% 8%, rgba(224, 183, 125, 0.65) 0%, rgba(196, 154, 97, 0.3) 55%, transparent 75%)',
@@ -514,11 +510,10 @@ export const CustomCursor: React.FC = () => {
                 src={CURSOR_PEN_SRC}
                 alt="Default Cursor - Golden Fountain Pen"
                 draggable={false}
-                className={`relative z-10 w-[26px] sm:w-[28px] h-auto object-contain select-none transition-all duration-150 ${
-                  isDisabledState
-                    ? 'opacity-55 grayscale-[40%] contrast-90'
-                    : ''
-                }`}
+                className={`relative z-10 w-[26px] sm:w-[28px] h-auto object-contain select-none transition-all duration-150 ${isDisabledState
+                  ? 'opacity-55 grayscale-[40%] contrast-90'
+                  : ''
+                  }`}
                 style={{
                   filter: isDisabledState
                     ? 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.85))'
@@ -528,9 +523,8 @@ export const CustomCursor: React.FC = () => {
 
               {/* Nib Tip Golden Sparkle */}
               <div
-                className={`absolute top-0 left-[6%] w-1.5 h-1.5 bg-[#FFF4D0] rounded-full blur-[0.5px] -translate-x-1/2 -translate-y-1/2 shadow-[0_0_5px_#FFE082] transition-opacity duration-150 ${
-                  isDisabledState ? 'opacity-0' : 'opacity-90'
-                }`}
+                className={`absolute top-0 left-[6%] w-1.5 h-1.5 bg-[#FFF4D0] rounded-full blur-[0.5px] -translate-x-1/2 -translate-y-1/2 shadow-[0_0_5px_#FFE082] transition-opacity duration-150 ${isDisabledState ? 'opacity-0' : 'opacity-90'
+                  }`}
               />
 
               {/* LOADING SUB-STATE: Rotating Golden Circular Indicator */}
