@@ -4,23 +4,35 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthModal } from './components/auth/AuthModal';
 import { Navbar, NavTab } from './components/common/Navbar';
 import { BookHero } from './components/common/BookHero';
-import { ArchiveManualModal } from './components/manual/ArchiveManualModal';
-import { HomeDesk } from './pages/HomeDesk';
-import { MyStories } from './pages/MyStories';
-import { StoryArchitect } from './pages/StoryArchitect';
-import { CharacterArchive } from './pages/CharacterArchive';
-import { StoryTimeline } from './pages/StoryTimeline';
-import { WritingStudio } from './pages/WritingStudio';
-import { UniverseMemory } from './pages/UniverseMemory';
-import { PlotHoleDetector } from './pages/PlotHoleDetector';
-import { IntelligenceDashboard } from './pages/IntelligenceDashboard';
 import { ToastContainer } from './components/common/ToastContainer';
-import { SettingsModal } from './components/common/SettingsModal';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { PacingAlertModal } from './components/common/PacingAlertModal';
 import { CursorProvider } from './context/CursorContext';
 import { CustomCursor } from './components/common/CustomCursor';
+
+// Route-based code splitting and lazy loading of heavy chambers
+const HomeDesk = React.lazy(() => import('./pages/HomeDesk').then(m => ({ default: m.HomeDesk })));
+const MyStories = React.lazy(() => import('./pages/MyStories').then(m => ({ default: m.MyStories })));
+const StoryArchitect = React.lazy(() => import('./pages/StoryArchitect').then(m => ({ default: m.StoryArchitect })));
+const CharacterArchive = React.lazy(() => import('./pages/CharacterArchive').then(m => ({ default: m.CharacterArchive })));
+const StoryTimeline = React.lazy(() => import('./pages/StoryTimeline').then(m => ({ default: m.StoryTimeline })));
+const WritingStudio = React.lazy(() => import('./pages/WritingStudio').then(m => ({ default: m.WritingStudio })));
+const UniverseMemory = React.lazy(() => import('./pages/UniverseMemory').then(m => ({ default: m.UniverseMemory })));
+const PlotHoleDetector = React.lazy(() => import('./pages/PlotHoleDetector').then(m => ({ default: m.PlotHoleDetector })));
+const IntelligenceDashboard = React.lazy(() => import('./pages/IntelligenceDashboard').then(m => ({ default: m.IntelligenceDashboard })));
+const ArchiveManualModal = React.lazy(() => import('./components/manual/ArchiveManualModal').then(m => ({ default: m.ArchiveManualModal })));
+const SettingsModal = React.lazy(() => import('./components/common/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const PacingAlertModal = React.lazy(() => import('./components/common/PacingAlertModal').then(m => ({ default: m.PacingAlertModal })));
+
+// Gothic themed chamber loading indicator
+const ChamberLoadingFallback: React.FC = () => (
+  <div className="flex-1 flex flex-col items-center justify-center min-h-[50vh] text-center space-y-3">
+    <div className="w-10 h-10 rounded-full border-2 border-[#C49A61]/40 border-t-[#E0B77D] animate-spin shadow-[0_0_15px_rgba(196,154,97,0.3)]" />
+    <span className="font-typewriter text-xs text-[#C49A61] uppercase tracking-widest">
+      Accessing Chamber Archives...
+    </span>
+  </div>
+);
 
 // Global error boundary protecting the application from black screens
 class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error?: Error }> {
@@ -365,50 +377,56 @@ const MainContent: React.FC = () => {
         onOpenManual={() => setManualOpen(true)}
       />
 
-      {/* Main Investigation Stage */}
+      {/* Main Investigation Stage with Lazy Code Splitting */}
       <main className="flex-1 relative z-10">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentTab}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            {currentTab === 'home' && (
-              <HomeDesk onNavigate={(tab, charId) => handleNavigate(tab, charId)} />
-            )}
-            {currentTab === 'stories' && <MyStories onNavigate={handleNavigate} />}
-            {currentTab === 'architect' && <StoryArchitect onNavigate={handleNavigate} />}
-            {currentTab === 'characters' && (
-              <CharacterArchive
-                initialCharacterId={activeCharacterId}
-                onSelectCharacterId={(id) => handleNavigate('characters', id || undefined)}
-              />
-            )}
-            {currentTab === 'timeline' && <StoryTimeline onNavigate={handleNavigate} />}
-            {currentTab === 'studio' && <WritingStudio />}
-            {currentTab === 'memory' && <UniverseMemory />}
-            {currentTab === 'plotholes' && <PlotHoleDetector onNavigate={handleNavigate} />}
-            {currentTab === 'intelligence' && <IntelligenceDashboard onNavigate={handleNavigate} />}
-          </motion.div>
-        </AnimatePresence>
+        <React.Suspense fallback={<ChamberLoadingFallback />}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              {currentTab === 'home' && (
+                <HomeDesk onNavigate={(tab, charId) => handleNavigate(tab, charId)} />
+              )}
+              {currentTab === 'stories' && <MyStories onNavigate={handleNavigate} />}
+              {currentTab === 'architect' && <StoryArchitect onNavigate={handleNavigate} />}
+              {currentTab === 'characters' && (
+                <CharacterArchive
+                  initialCharacterId={activeCharacterId}
+                  onSelectCharacterId={(id) => handleNavigate('characters', id || undefined)}
+                />
+              )}
+              {currentTab === 'timeline' && <StoryTimeline onNavigate={handleNavigate} />}
+              {currentTab === 'studio' && <WritingStudio />}
+              {currentTab === 'memory' && <UniverseMemory />}
+              {currentTab === 'plotholes' && <PlotHoleDetector onNavigate={handleNavigate} />}
+              {currentTab === 'intelligence' && <IntelligenceDashboard onNavigate={handleNavigate} />}
+            </motion.div>
+          </AnimatePresence>
+        </React.Suspense>
       </main>
 
       {/* System Toast Alerts */}
       <ToastContainer />
 
-      {/* Settings / Telemetry Diagnostics Modal */}
-      <SettingsModal
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-      />
-
-      {/* Interactive Manual Book of Every Chamber */}
-      <ArchiveManualModal
-        isOpen={manualOpen}
-        onClose={() => setManualOpen(false)}
-      />
+      {/* Modals with Lazy Code Splitting */}
+      <React.Suspense fallback={null}>
+        {settingsOpen && (
+          <SettingsModal
+            isOpen={settingsOpen}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
+        {manualOpen && (
+          <ArchiveManualModal
+            isOpen={manualOpen}
+            onClose={() => setManualOpen(false)}
+          />
+        )}
+      </React.Suspense>
     </div>
   );
 };
@@ -420,7 +438,9 @@ export default function App() {
         <StoryProvider>
           <MainContent />
           <AuthModal />
-          <PacingAlertModal />
+          <React.Suspense fallback={null}>
+            <PacingAlertModal />
+          </React.Suspense>
         </StoryProvider>
       </AuthProvider>
     </AppErrorBoundary>

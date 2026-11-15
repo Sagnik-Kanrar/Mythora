@@ -1,0 +1,19 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /$
+Allow: /assets/
+Allow: /favicon.svg
+Allow: /robots.txt
+Allow: /sitemap.xml
+
+# Protect authenticated dashboards, studio tools, and private user archives
+Disallow: /studio
+Disallow: /studio/
+Disallow: /api/
+Disallow: /*?*view=*
+Disallow: /*?*tab=*
+Disallow: /*?*story=*
+Disallow: /*?*character=*
+Disallow: /*?*characterId=*
+
+Sitemap: https://mythora.vercel.app/sitemap.xml

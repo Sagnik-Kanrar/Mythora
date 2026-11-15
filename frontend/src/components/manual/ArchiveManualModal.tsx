@@ -246,25 +246,58 @@ export const ArchiveManualModal: React.FC<ArchiveManualModalProps> = ({ isOpen, 
         </div>
 
         {/* Ribbon Bookmarks / Chapters Navigation Strip */}
-        <div className="w-full bg-[#110C08] border-b border-[#2C1F15] px-4 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
-          {manualSections.map((sec, idx) => {
-            const Icon = sec.icon;
-            const isSelected = idx === activePageIndex;
-            return (
-              <button
-                key={sec.id}
-                onClick={() => handleSelectSection(idx)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-sans font-medium whitespace-nowrap transition-all ${
-                  isSelected
-                    ? 'bg-[#C49A61] text-[#120D08] font-bold shadow-md shadow-[#C49A61]/20 scale-[1.02]'
-                    : 'bg-[#1C140E] text-[#B09E8C] hover:bg-[#2A1E15] hover:text-[#EDE3D6] border border-[#3A2B1D]/50'
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[#120D08]' : 'text-[#C49A61]'}`} />
-                <span>{sec.title}</span>
-              </button>
-            );
-          })}
+        <div className="w-full bg-[#110C08] border-b border-[#2C1F15] px-4 py-2 flex items-center justify-between gap-2">
+          {/* Scrollable Chapter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none flex-1 min-w-0 pr-1">
+            {manualSections.map((sec, idx) => {
+              const Icon = sec.icon;
+              const isSelected = idx === activePageIndex;
+              return (
+                <button
+                  key={sec.id}
+                  onClick={() => handleSelectSection(idx)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-sans font-medium whitespace-nowrap transition-all ${
+                    isSelected
+                      ? 'bg-[#C49A61] text-[#120D08] font-bold shadow-md shadow-[#C49A61]/20 scale-[1.02]'
+                      : 'bg-[#1C140E] text-[#B09E8C] hover:bg-[#2A1E15] hover:text-[#EDE3D6] border border-[#3A2B1D]/50'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-[#120D08]' : 'text-[#C49A61]'}`} />
+                  <span>{sec.title}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Upper-Right Chapter Navigation Arrows */}
+          <div className="flex items-center gap-1 shrink-0 pl-2 border-l border-[#2C1F15]">
+            <button
+              onClick={handlePrev}
+              disabled={activePageIndex === 0}
+              aria-label="Previous Chapter"
+              title="Previous Chapter"
+              className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
+                activePageIndex === 0
+                  ? 'opacity-30 cursor-not-allowed border-[#3A2B1D]/40 text-[#6B5A49]'
+                  : 'bg-[#1C140E] hover:bg-[#2C1F15] border-[#4A3725] hover:border-[#C49A61] text-[#C49A61] hover:text-[#F3D4A0] shadow-sm hover:scale-105 active:scale-95'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleNext}
+              disabled={activePageIndex === totalPages - 1}
+              aria-label="Next Chapter"
+              title="Next Chapter"
+              className={`w-7 h-7 rounded-md border flex items-center justify-center transition-all ${
+                activePageIndex === totalPages - 1
+                  ? 'opacity-30 cursor-not-allowed border-[#3A2B1D]/40 text-[#6B5A49]'
+                  : 'bg-[#1C140E] hover:bg-[#2C1F15] border-[#4A3725] hover:border-[#C49A61] text-[#C49A61] hover:text-[#F3D4A0] shadow-sm hover:scale-105 active:scale-95'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* Double-Page Spread Display */}

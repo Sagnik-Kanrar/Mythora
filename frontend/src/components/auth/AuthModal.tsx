@@ -177,6 +177,7 @@ export const AuthModal: React.FC = () => {
             onClick={handleClose}
             className="absolute top-4 right-4 p-1.5 rounded-full text-[#A69482] hover:text-[#F3D4A0] hover:bg-[#2B2016] transition-colors z-20"
             title="Close dialog"
+            aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>
@@ -276,12 +277,13 @@ export const AuthModal: React.FC = () => {
             {/* Username (Mandatory on Signup & Google Prompt) */}
             {(authModalMode === 'signup' || authModalMode === 'username_prompt') && (
               <div className="space-y-1 text-left">
-                <label className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
+                <label htmlFor="auth-username" className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
                   Username <span className="text-[#E74C3C]">*</span>
                 </label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
+                  <User aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
                   <input
+                    id="auth-username"
                     type="text"
                     required
                     value={username}
@@ -301,12 +303,13 @@ export const AuthModal: React.FC = () => {
             {/* Email (Signin, Signup, Forgot) */}
             {authModalMode !== 'username_prompt' && (
               <div className="space-y-1 text-left">
-                <label className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
+                <label htmlFor="auth-email" className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
                   Email Address <span className="text-[#E74C3C]">*</span>
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
+                  <Mail aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
                   <input
+                    id="auth-email"
                     type="email"
                     required
                     value={email}
@@ -322,7 +325,7 @@ export const AuthModal: React.FC = () => {
             {(authModalMode === 'signin' || authModalMode === 'signup') && (
               <div className="space-y-1 text-left">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
+                  <label htmlFor="auth-password" className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
                     Password <span className="text-[#E74C3C]">*</span>
                   </label>
                   {authModalMode === 'signin' && (
@@ -336,8 +339,9 @@ export const AuthModal: React.FC = () => {
                   )}
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
+                  <Lock aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
                   <input
+                    id="auth-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={password}
@@ -348,10 +352,11 @@ export const AuthModal: React.FC = () => {
                   />
                   <button
                     type="button"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8C7A68] hover:text-[#E0B77D] transition-colors"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showPassword ? <EyeOff aria-hidden="true" className="w-4 h-4" /> : <Eye aria-hidden="true" className="w-4 h-4" />}
                   </button>
                 </div>
                 {authModalMode === 'signup' && (
@@ -365,12 +370,13 @@ export const AuthModal: React.FC = () => {
             {/* Confirm Password (Signup only) */}
             {authModalMode === 'signup' && (
               <div className="space-y-1 text-left">
-                <label className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
+                <label htmlFor="auth-confirm-password" className="block text-xs font-typewriter font-bold uppercase tracking-wider text-[#C49A61]">
                   Confirm Password <span className="text-[#E74C3C]">*</span>
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
+                  <Lock aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8C7A68]" />
                   <input
+                    id="auth-confirm-password"
                     type={showPassword ? 'text' : 'password'}
                     required
                     value={confirmPassword}

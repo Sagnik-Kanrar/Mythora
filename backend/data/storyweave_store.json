@@ -1,7 +1,58 @@
 {
   "stories": {},
-  "chapters": {},
-  "pages": {},
+  "chapters": {
+    "chap_39dd66a014": {
+      "story_id": "story_4300846ac6",
+      "storyId": null,
+      "chapter_number": 1,
+      "order": null,
+      "title": "Chapter 1 - The Unfolding Incident",
+      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+      "summary": "",
+      "status": "draft",
+      "pages": [
+        {
+          "id": "page_chap_39dd66a014_1",
+          "chapter_id": "chap_39dd66a014",
+          "page_number": 1,
+          "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+          "save_status": "saved",
+          "word_count": 10,
+          "updated_at": "2026-11-15T18:07:58.731761",
+          "created_at": "2026-11-15T18:05:21.694471"
+        }
+      ],
+      "id": "chap_39dd66a014",
+      "word_count": 10,
+      "updated_at": "2026-11-15T18:07:59.090728"
+    },
+    "chap_fd1bdd97c6": {
+      "story_id": "story_4300846ac6",
+      "storyId": null,
+      "chapter_number": 1,
+      "order": null,
+      "title": "Chapter 1 - The Unfolding Incident",
+      "content": "",
+      "summary": "",
+      "status": "draft",
+      "pages": null,
+      "id": "chap_fd1bdd97c6",
+      "word_count": 0,
+      "updated_at": "2026-11-15T18:05:17.439317"
+    }
+  },
+  "pages": {
+    "page_chap_39dd66a014_1": {
+      "id": "page_chap_39dd66a014_1",
+      "chapter_id": "chap_39dd66a014",
+      "page_number": 1,
+      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+      "save_status": "saved",
+      "word_count": 10,
+      "updated_at": "2026-11-15T18:07:58.731761",
+      "created_at": "2026-11-15T18:05:21.694471"
+    }
+  },
   "characters": {},
   "events": {},
   "memories": {},

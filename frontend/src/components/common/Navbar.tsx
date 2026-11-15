@@ -11,8 +11,6 @@ import {
   Brain, 
   AlertTriangle, 
   PenTool, 
-  Volume2, 
-  VolumeX, 
   ChevronDown, 
   ChevronLeft,
   ChevronRight,
@@ -37,19 +35,17 @@ export type NavTab =
 interface NavbarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
   onOpenManual?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onSelectTab,
-  onOpenSettings,
   onOpenManual,
 }) => {
   const { stories, activeStory, setActiveStoryId } = useStory();
   const { user, profile, openAuthModal, signOutUser } = useAuth();
-  const [isAudioMuted, setIsAudioMuted] = useState(sound.getMuted());
   const [storyDropdownOpen, setStoryDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   
@@ -58,18 +54,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-
-  useEffect(() => {
-    return sound.subscribe((muted) => {
-      setIsAudioMuted(muted);
-    });
-  }, []);
-
-  const toggleSound = () => {
-    const muted = sound.toggleMute();
-    setIsAudioMuted(muted);
-    sound.playPaperRustle();
-  };
 
   // Check scroll position to dynamically show scroll chevrons and gradient masks
   const checkScroll = () => {
@@ -243,31 +227,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right: Ambient Sound, Settings, Storyteller Profile */}
+        {/* Right: Manual & Storyteller Profile */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          {/* Ambient Sound Switch */}
-          <button
-            onClick={toggleSound}
-            title={isAudioMuted ? "Turn on rain & desk ambient sound" : "Mute ambient sound"}
-            className={`flex items-center gap-2 h-10 sm:h-11 px-3 sm:px-4 rounded-lg border transition-all text-xs sm:text-sm font-sans font-medium shadow-sm shrink-0 ${
-              !isAudioMuted
-                ? 'bg-[#C49A61]/25 border-[#C49A61] text-[#E0B77D]'
-                : 'bg-[#1D1713] border-[#382E25] text-[#9E8C7B] hover:text-[#D4C5B2] hover:border-[#4D3F33]'
-            }`}
-          >
-            {!isAudioMuted ? (
-              <>
-                <Volume2 className="w-4 h-4 text-[#C49A61] animate-pulse shrink-0" />
-                <span className="hidden lg:inline whitespace-nowrap text-sm font-medium">Ambient Rain</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-[#7A6A5A] shrink-0" />
-                <span className="hidden lg:inline whitespace-nowrap text-sm font-medium">Muted</span>
-              </>
-            )}
-          </button>
-
           {/* Codex Manual Guidebook Trigger */}
           {onOpenManual && (
             <button
@@ -282,16 +243,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Manual</span>
             </button>
           )}
-
-          {/* Settings / Diagnostics Modal Trigger */}
-          <button
-            onClick={onOpenSettings}
-            className="h-10 sm:h-11 px-3 sm:px-4 rounded-lg bg-[#1D1713] border border-[#382E25] hover:border-[#C49A61]/50 text-[#B8A796] hover:text-[#E0B77D] transition-all font-sans text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 shrink-0"
-            title="System Diagnostics & Engine Status"
-          >
-            <span className="text-base">⚙️</span>
-            <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Settings</span>
-          </button>
 
           {/* User Authentication Badge & Profile Dropdown */}
           <div ref={userMenuRef} className="relative pl-2.5 sm:pl-3.5 border-l border-[#2C231B] shrink-0">

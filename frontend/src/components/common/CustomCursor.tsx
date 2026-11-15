@@ -61,7 +61,8 @@ export const CustomCursor: React.FC = () => {
     const checkTouch = () => {
       const isCoarse = window.matchMedia('(pointer: coarse)').matches;
       const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-      const touchOnly = isCoarse && hasTouch;
+      const isMobileWidth = window.innerWidth <= 768;
+      const touchOnly = isCoarse || (hasTouch && isMobileWidth);
       setIsTouch(touchOnly);
       isTouchDeviceRef.current = touchOnly;
       if (!touchOnly) {
@@ -72,7 +73,7 @@ export const CustomCursor: React.FC = () => {
     };
 
     checkTouch();
-    window.addEventListener('resize', checkTouch);
+    window.addEventListener('resize', checkTouch, { passive: true });
     return () => {
       window.removeEventListener('resize', checkTouch);
       document.documentElement.classList.remove('custom-cursor-enabled');
@@ -216,8 +217,8 @@ export const CustomCursor: React.FC = () => {
         renderPosRef.current.y = e.clientY;
       }
 
-      // Detect element underneath
-      const currentTarget = document.elementFromPoint(e.clientX, e.clientY);
+      // Detect element underneath without forcing layout reflow
+      const currentTarget = (e.target as Element) || document.elementFromPoint(e.clientX, e.clientY);
       if (currentTarget !== targetElement) {
         targetElement = currentTarget;
         const newType = findCursorType(currentTarget);
