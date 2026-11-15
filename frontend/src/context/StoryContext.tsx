@@ -60,6 +60,12 @@ export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const refreshStories = async () => {
     try {
       setLoading(true);
+      if (!auth.currentUser) {
+        setStories([]);
+        setActiveStory(null);
+        setLoading(false);
+        return;
+      }
       const data = await api.getStories();
       setStories(data);
 

@@ -514,8 +514,8 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
   };
 
   return (
-    <section 
-      ref={sectionRef} 
+    <section
+      ref={sectionRef}
       className="relative w-full h-screen overflow-hidden bg-black select-none z-20 flex flex-col justify-between"
       style={{
         ['--fs' as string]: 'min(22vh, 11vw)'
@@ -540,7 +540,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
           <source src="./assets/storyvideo.mp4" type="video/mp4" />
         </video>
         {/* Subtle dark atmospheric vignette overlay for text readability without altering video colors */}
-        <div 
+        <div
           className="absolute inset-0 pointer-events-none"
           style={{
             background: 'radial-gradient(circle at 50% 50%, rgba(0,0,0,0.18) 0%, rgba(0,0,0,0.52) 100%)'
@@ -548,9 +548,9 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         />
       </div>
 
-      {/* 2. Landing Page Authentication Entry Points (Sign In & Create an Account) */}
-      <div className="absolute top-6 right-6 sm:right-10 z-[35] flex items-center gap-3">
-        {user ? (
+      {/* Top Right Authenticated User Badge (Only shown when logged in) */}
+      {user && (
+        <div className="absolute top-6 right-6 sm:right-10 z-[35] flex items-center gap-3">
           <div className="flex items-center gap-2.5 bg-[#18120C]/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-[#C49A61]/50 shadow-lg">
             <div className="w-7 h-7 rounded-full bg-[#C49A61]/25 border border-[#C49A61] flex items-center justify-center text-xs font-bold text-[#F3D4A0]">
               {(profile?.username || user.displayName || 'I').substring(0, 2).toUpperCase()}
@@ -569,36 +569,13 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
               Sign Out
             </button>
           </div>
-        ) : (
-          <div className="flex items-center gap-2.5 sm:gap-3">
-            <button
-              onClick={() => {
-                sound.playPaperRustle();
-                openAuthModal('signin');
-              }}
-              className="px-4 py-2 rounded-full bg-[#18120C]/85 hover:bg-[#251B13] border border-[#C49A61]/50 hover:border-[#F3D4A0] text-[#E0B77D] hover:text-white font-sans text-xs uppercase tracking-wider font-bold backdrop-blur-md shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
-              title="Sign in to your Mythora account"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => {
-                sound.playPaperRustle();
-                openAuthModal('signup');
-              }}
-              className="px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-[#C49A61] via-[#DDB47D] to-[#C49A61] hover:brightness-110 text-[#140E0A] font-sans text-xs uppercase tracking-wider font-bold shadow-[0_2px_18px_rgba(196,154,97,0.4)] transition-all duration-300 hover:scale-105 active:scale-95"
-              title="Create a new Mythora account"
-            >
-              Create an Account
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 3D WebGL Canvas */}
-      <div 
-        ref={containerRef} 
-        className="absolute inset-0 z-[2] pointer-events-none" 
+      <div
+        ref={containerRef}
+        className="absolute inset-0 z-[2] pointer-events-none"
       />
 
       {/* Fallback CSS 3D Display if WebGL fails */}
@@ -606,7 +583,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         <div className="absolute inset-0 z-[2] pointer-events-none flex items-center justify-center overflow-hidden">
           <div className="flex gap-4 sm:gap-6 -rotate-6 scale-90 sm:scale-105 opacity-80 filter drop-shadow-[0_20px_35px_rgba(0,0,0,0.9)]">
             {sheetACells.slice(0, 7).map((c, idx) => (
-              <div 
+              <div
                 key={idx}
                 className="w-24 sm:w-36 h-36 sm:h-52 rounded-sm shadow-2xl p-2 sm:p-3 flex flex-col justify-between border border-white/20 transform hover:-translate-y-4 transition-transform duration-300"
                 style={{ backgroundColor: c.spine }}
@@ -624,14 +601,14 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       )}
 
       {/* Wordmark (z 1) - Ancient Wizard Calligraphy Manuscript Title */}
-      <div 
+      <div
         ref={wordmarkRef}
         className="absolute left-0 w-full text-center z-[1] pointer-events-none flex justify-center items-center"
         style={{
           top: 'calc(46.5vh - var(--fs) * 0.8 - clamp(42px, 4.8vh, 50px))'
         }}
       >
-        <h1 
+        <h1
           className="inline-block font-normal whitespace-nowrap leading-none select-none transition-all duration-300"
           style={{
             color: '#F3E2C2',
@@ -650,7 +627,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         {!user ? (
           <>
             {/* Sign In Button */}
-            <button 
+            <button
               onClick={() => {
                 sound.playPaperRustle();
                 openAuthModal('signin');
@@ -667,7 +644,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
             </button>
 
             {/* Create an Account Button */}
-            <button 
+            <button
               onClick={() => {
                 sound.playPaperRustle();
                 openAuthModal('signup');
@@ -679,13 +656,13 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
                 Create Account
               </span>
               <div className="w-5 h-5 rounded-full bg-[#140E0A]/20 border border-[#140E0A]/30 flex items-center justify-center transition-all duration-300">
-                <svg 
-                  className="w-3 h-3 text-[#140E0A] group-hover:translate-x-0.5 transition-all duration-300" 
-                  viewBox="0 0 24 24" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  strokeWidth="2.6" 
-                  strokeLinecap="round" 
+                <svg
+                  className="w-3 h-3 text-[#140E0A] group-hover:translate-x-0.5 transition-all duration-300"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
                   strokeLinejoin="round"
                 >
                   <path d="M5 12h14M13 5l7 7-7 7" />
@@ -695,7 +672,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
           </>
         ) : (
           /* Authenticated User: Enter Studio Button */
-          <button 
+          <button
             onClick={handleEnterStudio}
             className="cursor-pointer group flex items-center gap-3.5 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#18120C]/95 via-[#231A12]/95 to-[#18120C]/95 backdrop-blur-xl border border-[#C49A61]/70 hover:border-[#F3D4A0] ring-1 ring-[#C49A61]/30 hover:ring-[#F3D4A0]/60 shadow-[0_4px_30px_rgba(0,0,0,0.85),0_0_28px_rgba(196,154,97,0.4)] hover:shadow-[0_4px_35px_rgba(0,0,0,0.9),0_0_48px_rgba(196,154,97,0.7)] hover:scale-[1.04] active:scale-[0.97] transition-all duration-300"
             title="Enter Mythora Studio"
@@ -707,13 +684,13 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
               Enter Studio
             </span>
             <div className="w-5 h-5 rounded-full bg-[#C49A61]/20 group-hover:bg-[#C49A61]/40 border border-[#C49A61]/50 group-hover:border-[#F3D4A0] flex items-center justify-center transition-all duration-300">
-              <svg 
-                className="w-3 h-3 text-[#F3D4A0] group-hover:text-white group-hover:translate-x-0.5 transition-all duration-300" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                stroke="currentColor" 
-                strokeWidth="2.4" 
-                strokeLinecap="round" 
+              <svg
+                className="w-3 h-3 text-[#F3D4A0] group-hover:text-white group-hover:translate-x-0.5 transition-all duration-300"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
                 strokeLinejoin="round"
               >
                 <path d="M5 12h14M13 5l7 7-7 7" />

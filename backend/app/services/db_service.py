@@ -112,7 +112,7 @@ class DatabaseService:
         all_stories = list(stories_map.values())
         if user_id:
             return [s for s in all_stories if s.get("user_id") == user_id]
-        return all_stories
+        return []
 
     def get_story(self, story_id: str) -> Optional[Dict[str, Any]]:
         if self.use_mongo:

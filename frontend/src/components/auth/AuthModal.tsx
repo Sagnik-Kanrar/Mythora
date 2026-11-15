@@ -19,6 +19,7 @@ import {
 
 export const AuthModal: React.FC = () => {
   const {
+    user,
     authModalOpen,
     authModalMode,
     pendingGoogleUser,
@@ -43,9 +44,18 @@ export const AuthModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Auto-close modal and clear processing state as soon as user is authenticated (except during first-time Google username prompt)
+  useEffect(() => {
+    if (user && authModalOpen && authModalMode !== 'username_prompt') {
+      setSubmitting(false);
+      closeAuthModal();
+    }
+  }, [user, authModalOpen, authModalMode, closeAuthModal]);
+
   // Reset form when modal opens or mode changes
   useEffect(() => {
     if (authModalOpen) {
+      setSubmitting(false);
       setErrorMessage(null);
       setSuccessMessage(null);
       setPassword('');
@@ -89,6 +99,8 @@ export const AuthModal: React.FC = () => {
   // Submit Handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+
     setErrorMessage(null);
     setSuccessMessage(null);
     sound.playTypewriterKeystroke();
@@ -99,12 +111,14 @@ export const AuthModal: React.FC = () => {
       if (authModalMode === 'signin') {
         await signInWithEmail(email, password);
         sound.playPaperRustle();
+        closeAuthModal();
       } else if (authModalMode === 'signup') {
         if (password !== confirmPassword) {
           throw new Error("Passwords do not match. Please re-enter.");
         }
         await signUpWithEmail(email, password, username);
         sound.playPaperRustle();
+        closeAuthModal();
       } else if (authModalMode === 'forgot') {
         await resetPassword(email);
         setSuccessMessage(`Password reset instructions have been dispatched to ${email.trim()}. Please inspect your inbox.`);
@@ -112,6 +126,7 @@ export const AuthModal: React.FC = () => {
       } else if (authModalMode === 'username_prompt') {
         await submitGoogleUsername(username);
         sound.playPaperRustle();
+        closeAuthModal();
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An authentication error occurred.");
@@ -121,6 +136,7 @@ export const AuthModal: React.FC = () => {
   };
 
   const handleGoogleAuth = async () => {
+    if (submitting) return;
     sound.playTypewriterKeystroke();
     setErrorMessage(null);
     setSuccessMessage(null);

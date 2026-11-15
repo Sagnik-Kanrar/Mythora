@@ -53,6 +53,14 @@ export interface UserProfile {
   lastLoginAt: string;
 }
 
+// Helper to guard Firestore promises against hanging indefinitely
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 3500, fallbackValue: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
+  ]);
+}
+
 /**
  * Validates username format and checks uniqueness case-insensitively in Firestore.
  */
@@ -75,17 +83,17 @@ export async function isUsernameAvailable(rawUsername: string): Promise<{ availa
   const lower = username.toLowerCase();
 
   try {
-    // 1. Direct document lookup in the dedicated 'usernames' uniqueness index
+    // 1. Direct document lookup in the dedicated 'usernames' uniqueness index with timeout
     const usernameRef = doc(db, "usernames", lower);
-    const snap = await getDoc(usernameRef);
-    if (snap.exists()) {
+    const snap = await withTimeout(getDoc(usernameRef), 3500, null);
+    if (snap && snap.exists()) {
       return { available: false, error: "Username is already taken. Please choose another." };
     }
 
-    // 2. Secondary check across 'users' collection on usernameLowercase
+    // 2. Secondary check across 'users' collection on usernameLowercase with timeout
     const q = query(collection(db, "users"), where("usernameLowercase", "==", lower));
-    const userQuerySnap = await getDocs(q);
-    if (!userQuerySnap.empty) {
+    const userQuerySnap = await withTimeout(getDocs(q), 3500, null);
+    if (userQuerySnap && !userQuerySnap.empty) {
       return { available: false, error: "Username is already taken. Please choose another." };
     }
 
@@ -106,8 +114,8 @@ export async function checkEmailRegistered(rawEmail: string): Promise<boolean> {
 
   try {
     const q = query(collection(db, "users"), where("email", "==", email));
-    const snap = await getDocs(q);
-    return !snap.empty;
+    const snap = await withTimeout(getDocs(q), 3500, null);
+    return snap ? !snap.empty : false;
   } catch (err) {
     console.warn("[Firestore] Email registration query warning:", err);
     return false;
@@ -142,18 +150,22 @@ export async function saveUserProfile(
     lastLoginAt: now
   };
 
-  // 1. Save user profile doc in 'users/{uid}'
-  const userRef = doc(db, "users", uid);
-  await setDoc(userRef, profile, { merge: true });
+  // 1. Save user profile doc in 'users/{uid}' with timeout guard
+  try {
+    const userRef = doc(db, "users", uid);
+    await withTimeout(setDoc(userRef, profile, { merge: true }), 3500, undefined);
+  } catch (e) {
+    console.warn("[Firestore] saveUserProfile write warning:", e);
+  }
 
-  // 2. Reserve unique username in 'usernames/{usernameLowercase}'
+  // 2. Reserve unique username in 'usernames/{usernameLowercase}' non-blockingly
   try {
     const usernameRef = doc(db, "usernames", lower);
-    await setDoc(usernameRef, {
+    withTimeout(setDoc(usernameRef, {
       uid,
       username: data.username.trim(),
       createdAt: now
-    });
+    }), 3500, undefined).catch(() => {});
   } catch (e) {
     console.warn("[Firestore] Could not reserve username index doc:", e);
   }
@@ -162,13 +174,13 @@ export async function saveUserProfile(
 }
 
 /**
- * Fetch user profile from Firestore.
+ * Fetch user profile from Firestore with timeout protection.
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
     const userRef = doc(db, "users", uid);
-    const snap = await getDoc(userRef);
-    if (snap.exists()) {
+    const snap = await withTimeout(getDoc(userRef), 3500, null);
+    if (snap && snap.exists()) {
       return snap.data() as UserProfile;
     }
   } catch (err) {
@@ -178,13 +190,13 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 }
 
 /**
- * Update user's last login timestamp.
+ * Update user's last login timestamp without blocking authentication.
  */
 export async function updateLastLogin(uid: string): Promise<void> {
   try {
     const userRef = doc(db, "users", uid);
-    await updateDoc(userRef, {
+    await withTimeout(updateDoc(userRef, {
       lastLoginAt: new Date().toISOString()
-    });
+    }), 2500, undefined);
   } catch {}
 }

@@ -119,6 +119,13 @@ const MainContent: React.FC = () => {
     return true;
   });
 
+  // When user is successfully authenticated, automatically transition into Mythora studio!
+  useEffect(() => {
+    if (!loading && user) {
+      setIsStudioView(true);
+    }
+  }, [user, loading]);
+
   // Open the interactive Manual Book automatically when someone signs in
   useEffect(() => {
     if (!loading && user) {

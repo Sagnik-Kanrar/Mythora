@@ -36,10 +36,11 @@ def get_all_stories(user: Optional[Dict[str, Any]] = Depends(get_optional_user))
 
 @router.post("", response_model=Story)
 def create_story(data: StoryCreate, user: Optional[Dict[str, Any]] = Depends(get_optional_user)):
+    if not user or not user.get("uid"):
+        raise HTTPException(status_code=401, detail="Authentication required to create a story.")
     story_dict = data.dict()
     story_dict["id"] = f"story_{uuid.uuid4().hex[:10]}"
-    if user and user.get("uid"):
-        story_dict["user_id"] = user["uid"]
+    story_dict["user_id"] = user["uid"]
     return db_service.save_story(story_dict)
 
 @router.get("/{story_id}", response_model=Story)

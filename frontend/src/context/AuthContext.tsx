@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           const loadedProfile = await getUserProfile(currentUser.uid);
           if (loadedProfile && loadedProfile.username) {
             setProfile(loadedProfile);
-            await updateLastLogin(currentUser.uid);
+            updateLastLogin(currentUser.uid).catch(() => {});
           } else {
             // First time Google or missing username
             setProfile(null);
@@ -126,6 +126,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 4. Create Firebase Auth account
     const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
     const createdUser = userCredential.user;
+    setUser(createdUser);
 
     // 5. Update Firebase Auth displayName
     try {
@@ -164,6 +165,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, pass);
       const signedInUser = userCredential.user;
+      setUser(signedInUser);
 
       // Fetch or sync profile
       let userProfile = await getUserProfile(signedInUser.uid);
@@ -178,7 +180,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       setProfile(userProfile);
-      await updateLastLogin(signedInUser.uid);
+      updateLastLogin(signedInUser.uid).catch(() => {});
       closeAuthModal();
     } catch (err: any) {
       const code = err.code || '';
@@ -215,13 +217,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const googleUser = result.user;
+      setUser(googleUser);
 
       // Check whether their profile already exists in Firestore
       const existingProfile = await getUserProfile(googleUser.uid);
       if (existingProfile && existingProfile.username) {
         // Profile exists: sign them in directly without asking for username
         setProfile(existingProfile);
-        await updateLastLogin(googleUser.uid);
+        updateLastLogin(googleUser.uid).catch(() => {});
         closeAuthModal();
       } else {
         // First-time Google user: prompt for unique username
