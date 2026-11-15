@@ -93,7 +93,7 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 }
 
 const MainContent: React.FC = () => {
-  const { user, loading, openAuthModal } = useAuth();
+  const { user, loading, isRestoringSession, openAuthModal } = useAuth();
   const [manualOpen, setManualOpen] = useState(false);
   const prevUserRef = useRef<any>(undefined);
 
@@ -319,27 +319,24 @@ const MainContent: React.FC = () => {
     }
   };
 
-  // Loading Screen: Prevent flashing of protected content while auth session resolves
-  if (loading) {
-    return (
-      <div className="w-full h-screen bg-[#0C0A08] flex flex-col items-center justify-center text-[#E0D7C7] font-serif select-none">
-        <div className="relative flex flex-col items-center space-y-4">
-          <div className="w-14 h-14 rounded-full border-2 border-[#C49A61]/50 border-t-transparent animate-spin flex items-center justify-center shadow-[0_0_25px_rgba(196,154,97,0.35)]">
-            <span className="text-[#C49A61] text-lg font-bold font-serif select-none">✦</span>
-          </div>
-          <p className="font-typewriter text-xs uppercase tracking-[0.25em] text-[#C49A61]">
-            Verifying Investigator Credentials...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // 1. MANDATORY AUTHENTICATION GATE: Unauthenticated visitors or explicit landing page
+  // 1. MANDATORY AUTHENTICATION GATE: Unauthenticated visitors, landing page, or session restoration
   if (!isStudioView || !user) {
     return (
-      <div className="w-full h-screen overflow-hidden bg-black select-none">
+      <div className="w-full h-screen overflow-hidden bg-black select-none relative">
         <BookHero onContinue={handleEnterStudio} />
+        {/* Subtle, elegant credential restoration indicator for returning users only */}
+        {isRestoringSession && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed top-6 left-6 sm:left-10 z-50 flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-[#18120C]/90 border border-[#C49A61]/40 shadow-[0_4px_20px_rgba(0,0,0,0.7),0_0_12px_rgba(196,154,97,0.25)] backdrop-blur-md pointer-events-none select-none transition-all duration-300"
+          >
+            <div className="w-3.5 h-3.5 rounded-full border-2 border-[#C49A61]/40 border-t-[#F3D4A0] animate-spin" />
+            <span className="font-typewriter text-[11px] uppercase tracking-[0.18em] text-[#E0B77D] font-medium drop-shadow-sm">
+              Restoring Credentials...
+            </span>
+          </div>
+        )}
       </div>
     );
   }

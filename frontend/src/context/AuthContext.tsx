@@ -25,10 +25,30 @@ import {
 
 export type AuthModalMode = 'signin' | 'signup' | 'forgot' | 'username_prompt';
 
+/**
+ * Check if the browser holds a previously authenticated Firebase session or cached profile
+ */
+export function hasStoredAuthSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem('mythora_has_authenticated_session') === 'true') {
+      return true;
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('firebase:authUser') || key.startsWith('mythora_user_profile_'))) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
 interface AuthContextType {
   user: FirebaseUser | null;
   profile: UserProfile | null;
   loading: boolean;
+  isRestoringSession: boolean;
   authModalOpen: boolean;
   authModalMode: AuthModalMode;
   pendingGoogleUser: FirebaseUser | null;
@@ -53,6 +73,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRestoringSession, setIsRestoringSession] = useState<boolean>(() => {
+    return hasStoredAuthSession();
+  });
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [authModalMode, setAuthModalMode] = useState<AuthModalMode>('signin');
   const [pendingGoogleUser, setPendingGoogleUser] = useState<FirebaseUser | null>(null);
@@ -60,10 +83,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Restore session persistently on reload using Firebase UID as permanent identity
   useEffect(() => {
+    let isMounted = true;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      // If a stored session is being verified for a returning user, ensure indicator is active
+      if (currentUser && !profile) {
+        if (isMounted) setIsRestoringSession(true);
+      }
+
       setUser(currentUser);
       if (currentUser) {
         try {
+          try {
+            localStorage.setItem('mythora_has_authenticated_session', 'true');
+          } catch {}
+
           // 1. Primary lookup by UID in Firestore
           let loadedProfile = await getUserProfile(currentUser.uid);
 
@@ -85,22 +119,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           if (loadedProfile && loadedProfile.username && loadedProfile.username.trim() !== '') {
-            setProfile(loadedProfile);
+            if (isMounted) setProfile(loadedProfile);
             updateLastLogin(currentUser.uid).catch(() => {});
           } else {
             // Missing profile or username
-            setProfile(null);
+            if (isMounted) setProfile(null);
           }
         } catch (e) {
           console.warn("[Auth] Error fetching profile on auth change:", e);
         }
       } else {
-        setProfile(null);
+        try {
+          localStorage.removeItem('mythora_has_authenticated_session');
+        } catch {}
+        if (isMounted) setProfile(null);
       }
-      setLoading(false);
+
+      if (isMounted) {
+        setIsRestoringSession(false);
+        setLoading(false);
+      }
     });
 
-    return () => unsubscribe();
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
   const openAuthModal = (mode: AuthModalMode = 'signin') => {
@@ -375,6 +419,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (user) {
         clearCachedProfile(user.uid);
       }
+      try {
+        localStorage.removeItem('mythora_has_authenticated_session');
+      } catch {}
+      setIsRestoringSession(false);
       await signOut(auth);
       setUser(null);
       setProfile(null);
@@ -403,6 +451,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         profile,
         loading,
+        isRestoringSession,
         authModalOpen,
         authModalMode,
         pendingGoogleUser,
