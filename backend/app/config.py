@@ -40,4 +40,5 @@ FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "")
 
 # Server Configuration
 PORT = int(os.getenv("PORT", 8000))
-HOST = os.getenv("HOST", "127.0.0.1")
+HOST = os.getenv("HOST", "0.0.0.0")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "")

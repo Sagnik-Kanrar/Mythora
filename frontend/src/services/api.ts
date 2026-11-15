@@ -18,7 +18,8 @@ import {
 import rawMockData from '../data/mockStore.json';
 import { auth } from './firebase';
 
-const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : '';
+const rawApiBase = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
+const API_BASE = rawApiBase.replace(/\/+$/, '');
 
 // Clone mock data into local runtime store
 const localStore: any = JSON.parse(JSON.stringify(rawMockData));
