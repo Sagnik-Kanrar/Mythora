@@ -7,7 +7,10 @@ import {
   checkEmailRegistered,
   saveUserProfile,
   getUserProfile,
-  updateLastLogin
+  updateLastLogin,
+  getCachedProfile,
+  setCachedProfile,
+  clearCachedProfile
 } from '../services/firebase';
 import {
   signInWithPopup,
@@ -37,6 +40,7 @@ interface AuthContextType {
   signUpWithEmail: (email: string, pass: string, username: string) => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  submitUsername: (username: string) => Promise<void>;
   submitGoogleUsername: (username: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -54,18 +58,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [pendingGoogleUser, setPendingGoogleUser] = useState<FirebaseUser | null>(null);
   const [accountNotFoundMsg, setAccountNotFoundMsg] = useState<string | null>(null);
 
-  // Restore session persistently on reload
+  // Restore session persistently on reload using Firebase UID as permanent identity
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
         try {
-          const loadedProfile = await getUserProfile(currentUser.uid);
-          if (loadedProfile && loadedProfile.username) {
+          // 1. Primary lookup by UID in Firestore
+          let loadedProfile = await getUserProfile(currentUser.uid);
+
+          // 2. If not found in Firestore, check local storage cache
+          if (!loadedProfile || !loadedProfile.username) {
+            loadedProfile = getCachedProfile(currentUser.uid);
+          }
+
+          // 3. If still missing, check if Firebase Auth has displayName from previous registration
+          if ((!loadedProfile || !loadedProfile.username) && currentUser.displayName && currentUser.displayName.trim() !== '') {
+            // Self-heal profile and persist in Firestore under users/{uid}
+            loadedProfile = await saveUserProfile(currentUser.uid, {
+              username: currentUser.displayName.trim(),
+              email: currentUser.email || '',
+              displayName: currentUser.displayName.trim(),
+              photoURL: currentUser.photoURL || null,
+              authProvider: currentUser.providerData[0]?.providerId === 'google.com' ? 'google' : 'password'
+            });
+          }
+
+          if (loadedProfile && loadedProfile.username && loadedProfile.username.trim() !== '') {
             setProfile(loadedProfile);
             updateLastLogin(currentUser.uid).catch(() => {});
           } else {
-            // First time Google or missing username
+            // Missing profile or username
             setProfile(null);
           }
         } catch (e) {
@@ -167,21 +190,47 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const signedInUser = userCredential.user;
       setUser(signedInUser);
 
-      // Fetch or sync profile
+      // 1. Look up existing Firestore profile using permanent Firebase UID
       let userProfile = await getUserProfile(signedInUser.uid);
-      if (!userProfile) {
-        // Fallback profile if missing
-        userProfile = await saveUserProfile(signedInUser.uid, {
-          username: signedInUser.displayName || cleanEmail.split('@')[0],
-          email: cleanEmail,
-          displayName: signedInUser.displayName || cleanEmail.split('@')[0],
-          authProvider: 'password'
-        });
+
+      // 2. Check whether a valid username is already saved
+      if (userProfile && userProfile.username && userProfile.username.trim() !== '') {
+        // If the username exists, load existing profile and continue directly into Mythora
+        setProfile(userProfile);
+        updateLastLogin(signedInUser.uid).catch(() => {});
+        closeAuthModal();
+        return;
       }
 
-      setProfile(userProfile);
-      updateLastLogin(signedInUser.uid).catch(() => {});
-      closeAuthModal();
+      // 3. Fallback / Self-healing: Check local storage cache
+      const cached = getCachedProfile(signedInUser.uid);
+      if (cached && cached.username && cached.username.trim() !== '') {
+        setProfile(cached);
+        saveUserProfile(signedInUser.uid, cached).catch(() => {});
+        updateLastLogin(signedInUser.uid).catch(() => {});
+        closeAuthModal();
+        return;
+      }
+
+      // 4. Fallback / Self-healing: Check Firebase Auth displayName from registration
+      if (signedInUser.displayName && signedInUser.displayName.trim() !== '') {
+        const healedProfile = await saveUserProfile(signedInUser.uid, {
+          username: signedInUser.displayName.trim(),
+          email: cleanEmail,
+          displayName: signedInUser.displayName.trim(),
+          photoURL: signedInUser.photoURL || null,
+          authProvider: 'password'
+        });
+        setProfile(healedProfile);
+        updateLastLogin(signedInUser.uid).catch(() => {});
+        closeAuthModal();
+        return;
+      }
+
+      // 5. If and only if profile is genuinely missing and username is blank:
+      // Route to username selection
+      setAuthModalMode('username_prompt');
+      setAuthModalOpen(true);
     } catch (err: any) {
       const code = err.code || '';
       if (
@@ -219,19 +268,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const googleUser = result.user;
       setUser(googleUser);
 
-      // Check whether their profile already exists in Firestore
+      // 1. Look up existing Firestore profile using permanent Firebase UID
       const existingProfile = await getUserProfile(googleUser.uid);
-      if (existingProfile && existingProfile.username) {
-        // Profile exists: sign them in directly without asking for username
+      if (existingProfile && existingProfile.username && existingProfile.username.trim() !== '') {
+        // Returning Google user: load existing profile and continue directly into Mythora
         setProfile(existingProfile);
         updateLastLogin(googleUser.uid).catch(() => {});
         closeAuthModal();
-      } else {
-        // First-time Google user: prompt for unique username
-        setPendingGoogleUser(googleUser);
-        setAuthModalMode('username_prompt');
-        setAuthModalOpen(true);
+        return;
       }
+
+      // 2. Check local storage cache in case of sluggish network
+      const cached = getCachedProfile(googleUser.uid);
+      if (cached && cached.username && cached.username.trim() !== '') {
+        setProfile(cached);
+        saveUserProfile(googleUser.uid, cached).catch(() => {});
+        updateLastLogin(googleUser.uid).catch(() => {});
+        closeAuthModal();
+        return;
+      }
+
+      // 3. First-time Google user or missing username: prompt for unique username
+      setPendingGoogleUser(googleUser);
+      setAuthModalMode('username_prompt');
+      setAuthModalOpen(true);
     } catch (err: any) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
         // User closed the popup, handle gracefully without error toast
@@ -245,17 +305,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   /**
-   * Complete First-Time Google Sign-In with Chosen Unique Username
+   * Complete First-Time Sign-In with Chosen Unique Username
    */
-  const submitGoogleUsername = async (username: string) => {
+  const submitUsername = async (username: string) => {
     const cleanUsername = username.trim();
-    const targetUser = pendingGoogleUser || user;
+    const targetUser = pendingGoogleUser || user || auth.currentUser;
 
     if (!targetUser) {
       throw new Error("No authenticated session found. Please sign in again.");
     }
 
-    const check = await isUsernameAvailable(cleanUsername);
+    const check = await isUsernameAvailable(cleanUsername, targetUser.uid);
     if (!check.available) {
       throw new Error(check.error || "Username is not available.");
     }
@@ -264,22 +324,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       await updateProfile(targetUser, { displayName: cleanUsername });
     } catch (e) {
-      console.warn("[Auth] Failed to set Google user displayName:", e);
+      console.warn("[Auth] Failed to set user displayName:", e);
     }
 
-    // Save profile to Firestore
+    // Determine auth provider
+    const isGoogle = targetUser.providerData.some(p => p.providerId === 'google.com');
+
+    // Save profile to Firestore under users/{uid} and confirm written
     const newProfile = await saveUserProfile(targetUser.uid, {
       username: cleanUsername,
       email: targetUser.email || '',
-      displayName: targetUser.displayName || cleanUsername,
+      displayName: cleanUsername,
       photoURL: targetUser.photoURL || null,
-      authProvider: 'google'
+      authProvider: isGoogle ? 'google' : 'password'
     });
 
     setProfile(newProfile);
     setPendingGoogleUser(null);
     closeAuthModal();
   };
+
+  const submitGoogleUsername = submitUsername;
 
   /**
    * Forgot Password / Password Reset Email
@@ -307,6 +372,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
    */
   const signOutUser = async () => {
     try {
+      if (user) {
+        clearCachedProfile(user.uid);
+      }
       await signOut(auth);
       setUser(null);
       setProfile(null);
@@ -346,6 +414,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signUpWithEmail,
         signInWithEmail,
         signInWithGoogle,
+        submitUsername,
         submitGoogleUsername,
         resetPassword,
         signOutUser,

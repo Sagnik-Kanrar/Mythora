@@ -20,6 +20,7 @@ import {
 export const AuthModal: React.FC = () => {
   const {
     user,
+    profile,
     authModalOpen,
     authModalMode,
     pendingGoogleUser,
@@ -30,6 +31,7 @@ export const AuthModal: React.FC = () => {
     signUpWithEmail,
     signInWithEmail,
     signInWithGoogle,
+    submitUsername,
     submitGoogleUsername,
     resetPassword
   } = useAuth();
@@ -44,13 +46,15 @@ export const AuthModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Auto-close modal and clear processing state as soon as user is authenticated (except during first-time Google username prompt)
+  // Auto-close modal and clear processing state as soon as user is authenticated with a profile
   useEffect(() => {
-    if (user && authModalOpen && authModalMode !== 'username_prompt') {
-      setSubmitting(false);
-      closeAuthModal();
+    if (user && authModalOpen) {
+      if (profile?.username || authModalMode !== 'username_prompt') {
+        setSubmitting(false);
+        closeAuthModal();
+      }
     }
-  }, [user, authModalOpen, authModalMode, closeAuthModal]);
+  }, [user, profile, authModalOpen, authModalMode, closeAuthModal]);
 
   // Reset form when modal opens or mode changes
   useEffect(() => {
@@ -124,7 +128,8 @@ export const AuthModal: React.FC = () => {
         setSuccessMessage(`Password reset instructions have been dispatched to ${email.trim()}. Please inspect your inbox.`);
         sound.playPaperRustle();
       } else if (authModalMode === 'username_prompt') {
-        await submitGoogleUsername(username);
+        const fn = submitUsername || submitGoogleUsername;
+        await fn(username);
         sound.playPaperRustle();
         closeAuthModal();
       }
@@ -199,7 +204,7 @@ export const AuthModal: React.FC = () => {
               {authModalMode === 'signin' && "Unlock your case dossiers, narrative timelines, and writing studio."}
               {authModalMode === 'signup' && "Register your unique investigator identity to protect your manuscripts."}
               {authModalMode === 'forgot' && "Enter your registered email address to receive dispatch instructions."}
-              {authModalMode === 'username_prompt' && "Google verified! Choose a permanent unique alias for your dossiers."}
+              {authModalMode === 'username_prompt' && "Choose a permanent unique investigator alias for your dossiers."}
             </p>
           </div>
 
@@ -241,26 +246,26 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
 
-          {/* Google First-Time User Banner */}
-          {authModalMode === 'username_prompt' && pendingGoogleUser && (
+          {/* First-Time User Banner */}
+          {authModalMode === 'username_prompt' && (pendingGoogleUser || user) && (
             <div className="flex items-center gap-3 p-2.5 rounded-lg bg-[#231A12] border border-[#3E3123]">
-              {pendingGoogleUser.photoURL ? (
+              {(pendingGoogleUser?.photoURL || user?.photoURL) ? (
                 <img 
-                  src={pendingGoogleUser.photoURL} 
-                  alt="Google Profile" 
+                  src={pendingGoogleUser?.photoURL || user?.photoURL || ''} 
+                  alt="Profile" 
                   className="w-8 h-8 rounded-full border border-[#C49A61]" 
                 />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-[#C49A61]/20 border border-[#C49A61] flex items-center justify-center text-xs font-bold text-[#E0B77D]">
-                  G
+                  {((pendingGoogleUser?.displayName || user?.displayName || user?.email || 'I')[0]).toUpperCase()}
                 </div>
               )}
               <div className="overflow-hidden">
                 <p className="font-sans text-xs font-bold text-[#F4ECE2] truncate">
-                  {pendingGoogleUser.displayName || 'Google User'}
+                  {pendingGoogleUser?.displayName || user?.displayName || 'Investigator'}
                 </p>
                 <p className="font-sans text-[11px] text-[#A89886] truncate">
-                  {pendingGoogleUser.email}
+                  {pendingGoogleUser?.email || user?.email}
                 </p>
               </div>
             </div>

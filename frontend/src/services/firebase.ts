@@ -54,7 +54,7 @@ export interface UserProfile {
 }
 
 // Helper to guard Firestore promises against hanging indefinitely
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 3500, fallbackValue: T): Promise<T> {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 8000, fallbackValue: T): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((resolve) => setTimeout(() => resolve(fallbackValue), timeoutMs))
@@ -62,9 +62,44 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number = 3500, fallbackV
 }
 
 /**
- * Validates username format and checks uniqueness case-insensitively in Firestore.
+ * Local storage cache helpers to guarantee instant, flicker-free, and offline-resilient profile loading
  */
-export async function isUsernameAvailable(rawUsername: string): Promise<{ available: boolean; error?: string }> {
+export function getCachedProfile(uid: string): UserProfile | null {
+  if (!uid) return null;
+  try {
+    const raw = localStorage.getItem(`mythora_user_profile_${uid}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.username && typeof parsed.username === 'string' && parsed.username.trim() !== '') {
+        return parsed as UserProfile;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+export function setCachedProfile(uid: string, profile: UserProfile): void {
+  if (!uid || !profile) return;
+  try {
+    localStorage.setItem(`mythora_user_profile_${uid}`, JSON.stringify(profile));
+  } catch {}
+}
+
+export function clearCachedProfile(uid: string): void {
+  if (!uid) return;
+  try {
+    localStorage.removeItem(`mythora_user_profile_${uid}`);
+  } catch {}
+}
+
+/**
+ * Validates username format and checks uniqueness case-insensitively in Firestore.
+ * Allows current user to keep/re-verify their own username.
+ */
+export async function isUsernameAvailable(
+  rawUsername: string,
+  currentUid?: string
+): Promise<{ available: boolean; error?: string }> {
   const username = rawUsername.trim();
   if (!username) {
     return { available: false, error: "Username is required." };
@@ -85,22 +120,33 @@ export async function isUsernameAvailable(rawUsername: string): Promise<{ availa
   try {
     // 1. Direct document lookup in the dedicated 'usernames' uniqueness index with timeout
     const usernameRef = doc(db, "usernames", lower);
-    const snap = await withTimeout(getDoc(usernameRef), 3500, null);
+    const snap = await withTimeout(getDoc(usernameRef), 5000, null);
     if (snap && snap.exists()) {
+      const data = snap.data();
+      // If this record belongs to the current user, it is already their own username!
+      if (currentUid && data?.uid === currentUid) {
+        return { available: true };
+      }
       return { available: false, error: "Username is already taken. Please choose another." };
     }
 
     // 2. Secondary check across 'users' collection on usernameLowercase with timeout
     const q = query(collection(db, "users"), where("usernameLowercase", "==", lower));
-    const userQuerySnap = await withTimeout(getDocs(q), 3500, null);
+    const userQuerySnap = await withTimeout(getDocs(q), 5000, null);
     if (userQuerySnap && !userQuerySnap.empty) {
-      return { available: false, error: "Username is already taken. Please choose another." };
+      const belongsToOther = userQuerySnap.docs.some(d => {
+        const docUid = d.data()?.uid || d.id;
+        return !currentUid || docUid !== currentUid;
+      });
+      if (belongsToOther) {
+        return { available: false, error: "Username is already taken. Please choose another." };
+      }
     }
 
     return { available: true };
   } catch (err: any) {
     console.warn("[Firestore] Username check warning:", err);
-    // If offline or permission check occurs, fallback to proceeding
+    // If offline or permission check occurs, proceed
     return { available: true };
   }
 }
@@ -123,7 +169,8 @@ export async function checkEmailRegistered(rawEmail: string): Promise<boolean> {
 }
 
 /**
- * Save user profile in Firestore and record the username reservation.
+ * Save user profile in Firestore under users/{uid} and record the username reservation.
+ * Also immediately writes to local storage cache for permanent instant availability.
  */
 export async function saveUserProfile(
   uid: string,
@@ -136,36 +183,40 @@ export async function saveUserProfile(
   }
 ): Promise<UserProfile> {
   const now = new Date().toISOString();
-  const lower = data.username.trim().toLowerCase();
+  const cleanUsername = data.username.trim();
+  const lower = cleanUsername.toLowerCase();
 
   const profile: UserProfile = {
     uid,
-    username: data.username.trim(),
+    username: cleanUsername,
     usernameLowercase: lower,
     email: data.email.trim().toLowerCase(),
-    displayName: data.displayName || data.username.trim(),
+    displayName: data.displayName || cleanUsername,
     photoURL: data.photoURL || null,
     authProvider: data.authProvider,
     createdAt: now,
     lastLoginAt: now
   };
 
-  // 1. Save user profile doc in 'users/{uid}' with timeout guard
+  // 1. Immediately cache locally so the user session and username are never lost
+  setCachedProfile(uid, profile);
+
+  // 2. Save user profile doc in 'users/{uid}' with robust timeout
   try {
     const userRef = doc(db, "users", uid);
-    await withTimeout(setDoc(userRef, profile, { merge: true }), 3500, undefined);
+    await withTimeout(setDoc(userRef, profile, { merge: true }), 8000, undefined);
   } catch (e) {
     console.warn("[Firestore] saveUserProfile write warning:", e);
   }
 
-  // 2. Reserve unique username in 'usernames/{usernameLowercase}' non-blockingly
+  // 3. Reserve unique username in 'usernames/{usernameLowercase}'
   try {
     const usernameRef = doc(db, "usernames", lower);
     withTimeout(setDoc(usernameRef, {
       uid,
-      username: data.username.trim(),
+      username: cleanUsername,
       createdAt: now
-    }), 3500, undefined).catch(() => {});
+    }), 5000, undefined).catch(() => {});
   } catch (e) {
     console.warn("[Firestore] Could not reserve username index doc:", e);
   }
@@ -174,18 +225,45 @@ export async function saveUserProfile(
 }
 
 /**
- * Fetch user profile from Firestore with timeout protection.
+ * Fetch user profile from Firestore by UID with local cache fallback and multi-layered lookup.
  */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
+  if (!uid) return null;
+
+  // 1. Check local cache first for instant retrieval
+  const cached = getCachedProfile(uid);
+
   try {
+    // 2. Query Firestore by direct UID at 'users/{uid}' with 8s timeout
     const userRef = doc(db, "users", uid);
-    const snap = await withTimeout(getDoc(userRef), 3500, null);
+    const snap = await withTimeout(getDoc(userRef), 8000, null);
     if (snap && snap.exists()) {
-      return snap.data() as UserProfile;
+      const data = snap.data() as UserProfile;
+      if (data && data.username && data.username.trim() !== '') {
+        setCachedProfile(uid, data);
+        return data;
+      }
+    }
+
+    // 3. Secondary check: Query by field 'uid' in 'users' collection in case of ID normalization discrepancies
+    const q = query(collection(db, "users"), where("uid", "==", uid));
+    const querySnap = await withTimeout(getDocs(q), 5000, null);
+    if (querySnap && !querySnap.empty) {
+      const docData = querySnap.docs[0].data() as UserProfile;
+      if (docData && docData.username && docData.username.trim() !== '') {
+        setCachedProfile(uid, docData);
+        return docData;
+      }
     }
   } catch (err) {
     console.warn("[Firestore] getUserProfile warning:", err);
   }
+
+  // 4. Return cached profile if Firestore was slow or temporarily offline
+  if (cached && cached.username && cached.username.trim() !== '') {
+    return cached;
+  }
+
   return null;
 }
 
@@ -193,10 +271,11 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
  * Update user's last login timestamp without blocking authentication.
  */
 export async function updateLastLogin(uid: string): Promise<void> {
+  if (!uid) return;
   try {
     const userRef = doc(db, "users", uid);
     await withTimeout(updateDoc(userRef, {
       lastLoginAt: new Date().toISOString()
-    }), 2500, undefined);
+    }), 4000, undefined);
   } catch {}
 }
