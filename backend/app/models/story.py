@@ -1,4 +1,4 @@
-﻿from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uuid
@@ -18,6 +18,7 @@ class StoryCreate(BaseModel):
     ending_type: Optional[str] = "Twist"
     plot_outline: Optional[List[Dict[str, Any]]] = []
     cover_url: Optional[str] = None
+    user_id: Optional[str] = None
 
 class StoryUpdate(BaseModel):
     title: Optional[str] = None
@@ -34,6 +35,7 @@ class StoryUpdate(BaseModel):
     ending_type: Optional[str] = None
     plot_outline: Optional[List[Dict[str, Any]]] = None
     cover_url: Optional[str] = None
+    user_id: Optional[str] = None
 
 class Story(BaseModel):
     id: str = Field(default_factory=lambda: f"story_{uuid.uuid4().hex[:10]}")
@@ -51,5 +53,6 @@ class Story(BaseModel):
     ending_type: str = "Twist"
     plot_outline: List[Dict[str, Any]] = []
     cover_url: Optional[str] = None
+    user_id: Optional[str] = None
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())

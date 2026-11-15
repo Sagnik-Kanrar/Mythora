@@ -42,7 +42,7 @@ export const MetalClipboard: React.FC<MetalClipboardProps> = ({
             <div className="flex items-center space-x-2 px-3 py-1 rounded bg-[#1A1613] border border-[#C49A61]/40 shadow-inner">
               <span className="w-1.5 h-1.5 rounded-full bg-[#C49A61] animate-pulse"></span>
               <span className="font-serif text-xs font-bold tracking-widest text-[#E0B77D] uppercase">
-                StoryWeave Case File
+                Mythora Case File
               </span>
             </div>
 

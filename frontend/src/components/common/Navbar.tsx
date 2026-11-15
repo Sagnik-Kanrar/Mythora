@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useStory } from '../../context/StoryContext';
+import { useAuth } from '../../context/AuthContext';
 import { sound } from '../../services/audioService';
 import { 
   Compass, 
@@ -16,7 +17,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Activity,
-  Plus
+  Plus,
+  LogOut,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 
 export type NavTab = 
@@ -34,19 +38,24 @@ interface NavbarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   onOpenSettings: () => void;
+  onOpenManual?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onSelectTab,
   onOpenSettings,
+  onOpenManual,
 }) => {
   const { stories, activeStory, setActiveStoryId } = useStory();
+  const { user, profile, openAuthModal, signOutUser } = useAuth();
   const [isAudioMuted, setIsAudioMuted] = useState(sound.getMuted());
   const [storyDropdownOpen, setStoryDropdownOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   
   const tabScrollRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
@@ -103,20 +112,23 @@ export const Navbar: React.FC<NavbarProps> = ({
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setStoryDropdownOpen(false);
       }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
     };
-    if (storyDropdownOpen) {
+    if (storyDropdownOpen || userMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [storyDropdownOpen]);
+  }, [storyDropdownOpen, userMenuOpen]);
 
   const navItems = [
     { id: 'home', label: "Writer's Desk", icon: Compass, badge: null },
     { id: 'stories', label: 'Case Archives', icon: BookOpen, badge: stories.length },
     { id: 'architect', label: 'Story Architect', icon: Feather, badge: null },
-    { id: 'characters', label: 'Dossiers', icon: Users, badge: null },
+    { id: 'characters', label: 'Dossiers', icon: Users, badge: 'KEY' },
     { id: 'timeline', label: 'Story Timeline', icon: GitBranch, badge: 'KEY' },
     { id: 'memory', label: 'Universe Memory', icon: Brain, badge: null },
     { id: 'plotholes', label: 'Investigation Board', icon: AlertTriangle, badge: 'AI' },
@@ -142,14 +154,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-gradient-to-br from-[#C49A61] to-[#7A5A2B] p-0.5 shadow-md flex items-center justify-center shrink-0">
               <div className="w-full h-full bg-[#18130F] rounded-[6px] flex items-center justify-center">
                 <span className="font-serif text-lg sm:text-xl font-bold text-[#F3D4A0] group-hover:scale-105 transition-transform">
-                  SW
+                  M
                 </span>
               </div>
             </div>
             <div className="flex flex-col shrink-0">
               <div className="flex items-center gap-2">
                 <span className="font-serif font-bold tracking-wide text-lg sm:text-xl text-[#F5EDE3] whitespace-nowrap">
-                  StoryWeave
+                  Mythora
                 </span>
                 <span className="px-2 py-0.5 text-xs font-sans font-bold tracking-wider bg-[#C49A61]/25 text-[#E5BA78] rounded border border-[#C49A61]/40 uppercase">
                   Studio
@@ -256,6 +268,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
+          {/* Codex Manual Guidebook Trigger */}
+          {onOpenManual && (
+            <button
+              onClick={() => {
+                sound.playPaperRustle();
+                onOpenManual();
+              }}
+              className="h-10 sm:h-11 px-3 sm:px-4 rounded-lg bg-[#1D1713] border border-[#382E25] hover:border-[#C49A61]/80 text-[#B8A796] hover:text-[#F3D4A0] transition-all font-sans text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 shrink-0 group cursor-pointer"
+              title="Open Mythora Investigator's Manual & Guidebook"
+            >
+              <BookOpen className="w-4 h-4 text-[#C49A61] group-hover:scale-110 transition-transform shrink-0" />
+              <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Manual</span>
+            </button>
+          )}
+
           {/* Settings / Diagnostics Modal Trigger */}
           <button
             onClick={onOpenSettings}
@@ -266,15 +293,97 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Settings</span>
           </button>
 
-          {/* User Badge */}
-          <div className="flex items-center gap-2.5 pl-2.5 sm:pl-3.5 border-l border-[#2C231B] shrink-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#261E18] border border-[#C49A61]/50 flex items-center justify-center shadow-inner shrink-0 ring-1 ring-[#C49A61]/20">
-              <span className="font-serif text-xs sm:text-sm font-bold text-[#E0B77D]">ST</span>
-            </div>
-            <div className="hidden xl:block shrink-0">
-              <p className="font-serif text-sm font-bold text-[#F4ECE2] leading-tight whitespace-nowrap">Storyteller</p>
-              <p className="font-sans text-xs text-[#A89886] leading-tight whitespace-nowrap">Senior Investigator</p>
-            </div>
+          {/* User Authentication Badge & Profile Dropdown */}
+          <div ref={userMenuRef} className="relative pl-2.5 sm:pl-3.5 border-l border-[#2C231B] shrink-0">
+            {user ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playPaperRustle();
+                    setUserMenuOpen(!userMenuOpen);
+                  }}
+                  className="flex items-center gap-2.5 hover:opacity-90 transition-opacity text-left cursor-pointer"
+                  title="Investigator profile options"
+                >
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#261E18] border border-[#C49A61]/60 flex items-center justify-center shadow-inner shrink-0 ring-1 ring-[#C49A61]/30 overflow-hidden">
+                    {user.photoURL ? (
+                      <img src={user.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="font-serif text-xs sm:text-sm font-bold text-[#F3D4A0]">
+                        {(profile?.username || user.displayName || 'IV').substring(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="hidden xl:block shrink-0">
+                    <p className="font-serif text-sm font-bold text-[#F4ECE2] leading-tight whitespace-nowrap truncate max-w-[130px]">
+                      {profile?.username || user.displayName || 'Investigator'}
+                    </p>
+                    <p className="font-sans text-xs text-[#C49A61] leading-tight whitespace-nowrap">
+                      Senior Investigator
+                    </p>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-[#8C7A68] hidden xl:block" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-64 rounded-xl bg-[#1C1612]/95 border border-[#4A3B2C] shadow-2xl backdrop-blur-md p-3 space-y-3 z-50">
+                    <div className="space-y-0.5 pb-2.5 border-b border-[#382E24]">
+                      <p className="font-serif text-sm font-bold text-[#F4ECE2] truncate">
+                        {profile?.username || user.displayName || 'Investigator'}
+                      </p>
+                      <p className="font-sans text-xs text-[#A89886] truncate">
+                        {user.email}
+                      </p>
+                      <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-typewriter uppercase tracking-wider bg-[#C49A61]/15 text-[#E0B77D] border border-[#C49A61]/30">
+                        {profile?.authProvider === 'google' ? 'Google Account' : 'Archive Credential'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sound.playPaperRustle();
+                        setUserMenuOpen(false);
+                        signOutUser();
+                      }}
+                      className="w-full py-2 px-3 rounded-lg bg-[#2B1714] hover:bg-[#8C2E24] text-[#E5A8A3] hover:text-white border border-[#8C2E24]/60 font-sans text-xs font-bold uppercase tracking-wider transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playPaperRustle();
+                    openAuthModal('signin');
+                  }}
+                  className="h-9 sm:h-10 px-3 sm:px-3.5 rounded-lg bg-[#1D1713] hover:bg-[#2A2019] border border-[#C49A61]/50 text-[#E0B77D] hover:text-white font-sans text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  title="Sign in"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    sound.playPaperRustle();
+                    openAuthModal('signup');
+                  }}
+                  className="h-9 sm:h-10 px-3 sm:px-3.5 rounded-lg bg-gradient-to-r from-[#C49A61] to-[#DDB47D] hover:brightness-110 text-[#140E0A] font-sans text-xs sm:text-sm font-bold uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  title="Create an account"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Register</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

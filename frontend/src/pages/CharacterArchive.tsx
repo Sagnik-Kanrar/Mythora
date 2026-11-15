@@ -28,7 +28,10 @@ import {
   Check,
   ArrowLeft,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Share2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 
 export interface BoardConnection {
@@ -38,6 +41,16 @@ export interface BoardConnection {
   label: string;
   type: string;
   notes?: string;
+  sourceName?: string;
+  targetName?: string;
+  direction?: string;
+  source_chapter?: string;
+  evidence_quote?: string;
+  related_event?: string;
+  confidence?: 'High' | 'Medium' | 'Possible Connection' | string;
+  verified?: boolean;
+  is_manual?: boolean;
+  user_edited?: boolean;
 }
 
 interface Position {
@@ -319,12 +332,34 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
   const [editingChar, setEditingChar] = useState<Partial<Character> | null>(null);
   const [generatingAi, setGeneratingAi] = useState(false);
   const [isSyncingManuscript, setIsSyncingManuscript] = useState(false);
+  const [isAiThreading, setIsAiThreading] = useState(false);
 
   // Confidential intel reveal toggles
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({});
 
   // Fullscreen / Expanded board toggle
   const [isBoardExpanded, setIsBoardExpanded] = useState(false);
+
+  // Dynamic Auto-Zoom & Spacing based on character count:
+  // If fewer characters (<= 4): normal size of the board (zoom = 1.0)
+  // When the board fills up with characters: automatically zoom out with generous spacing
+  const autoBoardZoom = useMemo(() => {
+    const count = (characterFilter === 'all' ? characters : filteredCharacters).length;
+    if (count <= 4) return 1.0;
+    if (count <= 6) return 0.90;
+    if (count <= 8) return 0.82;
+    if (count <= 12) return 0.74;
+    if (count <= 16) return 0.65;
+    return Math.max(0.50, Math.round((0.65 - (count - 16) * 0.02) * 100) / 100);
+  }, [characters.length, filteredCharacters.length, characterFilter]);
+
+  const [manualZoom, setManualZoom] = useState<number | null>(null);
+  const boardZoom = manualZoom !== null ? manualZoom : autoBoardZoom;
+
+  // Reset manual zoom whenever the active story changes
+  useEffect(() => {
+    setManualZoom(null);
+  }, [activeStory?.id]);
 
   // Dragging & synchronization state tracking
   const boardRef = useRef<HTMLDivElement>(null);
@@ -389,6 +424,9 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
         setEditingConnection(null);
         setModalOpen(false);
         setConnectingSourceId(null);
+      } else if ((e.altKey && (e.key === 'c' || e.key === 'C')) || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C'))) {
+        e.preventDefault();
+        handleSyncManuscript();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -437,8 +475,13 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     }
 
     const initialPositions = sanitizePositionMap(localSaved.positions);
+    const count = characters.length;
+    const currentZoom = count <= 4 ? 1.0 : count <= 6 ? 0.90 : count <= 8 ? 0.82 : count <= 12 ? 0.74 : 0.65;
+    const gapX = count <= 4 ? 50 : count <= 8 ? 75 : 85;
+    const gapY = count <= 4 ? 45 : count <= 8 ? 65 : 75;
     const boardWidth = boardRef.current ? boardRef.current.clientWidth : 1000;
-    const cols = Math.max(2, Math.floor((boardWidth - 80) / (CARD_W + 45)));
+    const virtualBoardWidth = boardWidth / currentZoom;
+    const cols = Math.max(2, Math.floor((virtualBoardWidth - 80) / (CARD_W + gapX)));
 
     characters.forEach((char, idx) => {
       if (!char || !char.id) return;
@@ -446,8 +489,8 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
         const col = idx % cols;
         const row = Math.floor(idx / cols);
         initialPositions[char.id] = {
-          x: 40 + col * (CARD_W + 50) + (row % 2 === 1 ? 25 : 0),
-          y: 40 + row * (CARD_H + 45),
+          x: 40 + col * (CARD_W + gapX) + (row % 2 === 1 ? 25 : 0),
+          y: 40 + row * (CARD_H + gapY),
         };
       }
     });
@@ -607,22 +650,27 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
   // 4. Auto-Arrange / Reset Board Layout
   const handleAutoArrange = () => {
     if (!boardRef.current) return;
-    const width = boardRef.current.clientWidth;
-    const cols = Math.max(2, Math.floor((width - 60) / (CARD_W + 55)));
+    const count = characters.length;
+    const zoom = count <= 4 ? 1.0 : count <= 6 ? 0.90 : count <= 8 ? 0.82 : count <= 12 ? 0.74 : 0.65;
+    const virtualWidth = boardRef.current.clientWidth / zoom;
+    const gapX = count <= 4 ? 50 : count <= 8 ? 75 : 85;
+    const gapY = count <= 4 ? 45 : count <= 8 ? 65 : 75;
+    const cols = Math.max(2, Math.floor((virtualWidth - 60) / (CARD_W + gapX)));
     const freshPositions: Record<string, Position> = {};
     characters.forEach((char, idx) => {
       const col = idx % cols;
       const row = Math.floor(idx / cols);
       freshPositions[char.id] = {
-        x: 40 + col * (CARD_W + 50) + (row % 2 === 1 ? 25 : 0),
-        y: 40 + row * (CARD_H + 45),
+        x: 40 + col * (CARD_W + gapX) + (row % 2 === 1 ? 25 : 0),
+        y: 40 + row * (CARD_H + gapY),
       };
     });
     latestPositionsRef.current = freshPositions;
     setPositions(freshPositions);
+    setManualZoom(null);
     persistBoard(freshPositions, connectionsRef.current);
     sound.playPaperRustle();
-    addToast("Board Rearranged", "Portraits organized into investigative matrix.", "info");
+    addToast("Board Rearranged", "Portraits organized into investigative matrix with optimal spacing.", "info");
   };
 
   // 5. Drag and Drop Pointer Event Handlers
@@ -661,8 +709,8 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     if (connectingSourceId && boardRef.current) {
       const rect = boardRef.current.getBoundingClientRect();
       setMousePos({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        x: (e.clientX - rect.left) / boardZoom,
+        y: (e.clientY - rect.top) / boardZoom
       });
       return;
     }
@@ -670,11 +718,11 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     const currentDrag = dragRef.current;
     if (!currentDrag || currentDrag.id !== charId) return;
 
-    const dx = e.clientX - currentDrag.startX;
-    const dy = e.clientY - currentDrag.startY;
+    const dx = (e.clientX - currentDrag.startX) / boardZoom;
+    const dy = (e.clientY - currentDrag.startY) / boardZoom;
 
     if (!hasDraggedDistanceRef.current) {
-      if (Math.hypot(dx, dy) > 4) {
+      if (Math.hypot(dx * boardZoom, dy * boardZoom) > 4) {
         hasDraggedDistanceRef.current = true;
         isDraggingRef.current = true;
         setDraggingCharId(charId);
@@ -685,8 +733,10 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
 
     if (!boardRef.current) return;
     const rect = boardRef.current.getBoundingClientRect();
-    const maxX = Math.max(10, rect.width - CARD_W - 10);
-    const maxY = Math.max(10, rect.height - CARD_H - 10);
+    const virtualWidth = rect.width / boardZoom;
+    const virtualHeight = rect.height / boardZoom;
+    const maxX = Math.max(10, virtualWidth - CARD_W - 10);
+    const maxY = Math.max(10, virtualHeight - CARD_H - 10);
 
     const nextX = Math.max(10, Math.min(maxX, Math.round(currentDrag.initialX + dx)));
     const nextY = Math.max(10, Math.min(maxY, Math.round(currentDrag.initialY + dy)));
@@ -737,8 +787,8 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     if (connectingSourceId && boardRef.current) {
       const rect = boardRef.current.getBoundingClientRect();
       setMousePos({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        x: (e.clientX - rect.left) / boardZoom,
+        y: (e.clientY - rect.top) / boardZoom
       });
     }
 
@@ -746,11 +796,11 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     if (!currentDrag || !boardRef.current) return;
 
     const charId = currentDrag.id;
-    const dx = e.clientX - currentDrag.startX;
-    const dy = e.clientY - currentDrag.startY;
+    const dx = (e.clientX - currentDrag.startX) / boardZoom;
+    const dy = (e.clientY - currentDrag.startY) / boardZoom;
 
     if (!hasDraggedDistanceRef.current) {
-      if (Math.hypot(dx, dy) > 4) {
+      if (Math.hypot(dx * boardZoom, dy * boardZoom) > 4) {
         hasDraggedDistanceRef.current = true;
         isDraggingRef.current = true;
         setDraggingCharId(charId);
@@ -760,8 +810,10 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
     }
 
     const rect = boardRef.current.getBoundingClientRect();
-    const maxX = Math.max(10, rect.width - CARD_W - 10);
-    const maxY = Math.max(10, rect.height - CARD_H - 10);
+    const virtualWidth = rect.width / boardZoom;
+    const virtualHeight = rect.height / boardZoom;
+    const maxX = Math.max(10, virtualWidth - CARD_W - 10);
+    const maxY = Math.max(10, virtualHeight - CARD_H - 10);
 
     const nextX = Math.max(10, Math.min(maxX, Math.round(currentDrag.initialX + dx)));
     const nextY = Math.max(10, Math.min(maxY, Math.round(currentDrag.initialY + dy)));
@@ -914,12 +966,17 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
 
   const handleUpdateConnection = () => {
     if (!editingConnection) return;
-    const nextConns = connections.map(c => (c && c.id === editingConnection.id ? editingConnection : c));
+    const manualConn = {
+      ...editingConnection,
+      is_manual: true,
+      user_edited: true
+    };
+    const nextConns = connections.map(c => (c && c.id === editingConnection.id ? manualConn : c));
     connectionsRef.current = nextConns;
     setConnections(nextConns);
     persistBoard(latestPositionsRef.current, nextConns);
     sound.playTypewriterKeystroke();
-    addToast("Relationship Revised", "Evidence thread updated.", "success");
+    addToast("Relationship Revised", "Evidence thread updated and saved.", "success");
     setEditingConnection(null);
   };
 
@@ -929,18 +986,84 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
       setIsSyncingManuscript(true);
       sound.playTypewriterKeystroke();
       const res = await api.syncStoryCharacters(activeStory.id);
-      await fetchCharacters();
+      if (res.characters) {
+        setCharacters(res.characters);
+      } else {
+        await fetchCharacters();
+      }
+      const added = res.added_count ?? res.synced_count ?? 0;
+      const updatedCount = res.updated_count ?? 0;
+      const totalChars = res.characters ? res.characters.length : characters.length;
+      const unchanged = res.unchanged_count ?? Math.max(0, totalChars - added - updatedCount);
       addToast(
         "Characters Synchronized",
-        res.synced_count > 0 
-          ? `Extracted ${res.synced_count} character(s) from manuscript chapters.` 
-          : "Manuscript scanned. All characters are already present.",
+        `${added} added, ${updatedCount} updated, ${unchanged} unchanged.`,
         "success"
       );
     } catch (e: any) {
       addToast("Sync Error", e.message || "Failed to sync characters from chapters.", "error");
     } finally {
       setIsSyncingManuscript(false);
+    }
+  };
+
+  const handleCreateAiThreading = async () => {
+    if (!activeStory) return;
+    if (characters.length < 2) {
+      addToast("Need More Characters", "Add or sync at least two characters to thread relationships.", "info");
+      return;
+    }
+    try {
+      setIsAiThreading(true);
+      sound.playTypewriterKeystroke();
+      const res = await api.autoConnectStoryBoard(activeStory.id);
+      if (res && res.connections && Array.isArray(res.connections)) {
+        // Sanitize connections: keep only those with valid sourceId & targetId in existing characters
+        const validConns: BoardConnection[] = res.connections
+          .filter((c: any) => c && (c.sourceId || c.source_id) && (c.targetId || c.target_id) && (c.sourceId || c.source_id) !== (c.targetId || c.target_id))
+          .map((c: any, index: number) => {
+            const sId = c.sourceId || c.source_id;
+            const tId = c.targetId || c.target_id;
+            return {
+              id: c.id || `conn_${sId}_${tId}_${index}`,
+              sourceId: sId,
+              targetId: tId,
+              sourceName: c.sourceName || "",
+              targetName: c.targetName || "",
+              label: c.label || "Connected",
+              type: c.type || "friends",
+              notes: c.notes || "",
+              evidence_quote: c.evidence_quote || "",
+              related_event: c.related_event || "",
+              confidence: c.confidence || "High",
+              verified: c.verified ?? true,
+              is_manual: c.is_manual ?? false,
+              user_edited: c.user_edited ?? false,
+              direction: c.direction || "bidirectional"
+            };
+          });
+
+        connectionsRef.current = validConns;
+        setConnections(validConns);
+        persistBoard(latestPositionsRef.current, validConns);
+
+        const added = res.added_count ?? 0;
+        const total = res.total_connections ?? validConns.length;
+        if (added > 0) {
+          addToast("AI Threading Complete", `Discovered and connected ${added} story relationship thread${added === 1 ? '' : 's'}.`, "success");
+        } else if (total > 0) {
+          addToast("AI Threading Verified", `All ${total} character relationship thread${total === 1 ? '' : 's'} are mapped and verified from the story.`, "info");
+        } else {
+          addToast("AI Threading", "No explicit relationships found in saved chapters yet.", "info");
+        }
+      } else {
+        addToast("AI Threading", "No relationships detected in saved chapters.", "info");
+      }
+    } catch (e: any) {
+      console.error("AI Threading error:", e);
+      addToast("Threading Error", e.message || "Failed to analyze and connect character relationships.", "error");
+    } finally {
+      setIsAiThreading(false);
     }
   };
 
@@ -1024,14 +1147,17 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
       } else {
         const created = await api.createCharacter(activeStory.id, charData);
         const curCount = characters.length;
+        const zoom = curCount <= 4 ? 1.0 : curCount <= 6 ? 0.90 : curCount <= 8 ? 0.82 : curCount <= 12 ? 0.74 : 0.65;
+        const gapX = curCount <= 4 ? 50 : curCount <= 8 ? 75 : 85;
+        const gapY = curCount <= 4 ? 45 : curCount <= 8 ? 65 : 75;
         const rect = boardRef.current?.getBoundingClientRect();
-        const width = rect?.width || 900;
-        const cols = Math.max(2, Math.floor(width / (CARD_W + 50)));
+        const virtualWidth = (rect?.width || 900) / zoom;
+        const cols = Math.max(2, Math.floor((virtualWidth - 60) / (CARD_W + gapX)));
         const col = curCount % cols;
         const row = Math.floor(curCount / cols);
         const newPos = {
-          x: 40 + col * (CARD_W + 50),
-          y: 40 + row * (CARD_H + 40)
+          x: 40 + col * (CARD_W + gapX) + (row % 2 === 1 ? 25 : 0),
+          y: 40 + row * (CARD_H + gapY)
         };
         const nextPos = { ...positions, [created.id]: newPos };
         setPositions(nextPos);
@@ -1145,6 +1271,17 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
               <span>{connectingSourceId ? 'Connecting...' : 'Tie Red Thread'}</span>
             </button>
 
+            {/* Create AI Threading Button */}
+            <button
+              onClick={handleCreateAiThreading}
+              disabled={isAiThreading}
+              title="Analyze story narrative and automatically thread related characters"
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-[#2B1714] hover:bg-[#3D1E1A] text-[#F3A49E] border border-[#8C2E24] hover:border-[#C0392B] font-typewriter text-xs uppercase font-bold tracking-wider transition-all disabled:opacity-50 shadow-sm"
+            >
+              <Share2 className={`w-3.5 h-3.5 text-[#E74C3C] ${isAiThreading ? 'animate-spin' : ''}`} />
+              <span>{isAiThreading ? "Threading..." : "Create AI Threading"}</span>
+            </button>
+
             {/* Auto Arrange Layout Button */}
             <button
               onClick={handleAutoArrange}
@@ -1187,11 +1324,12 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
             <button
               onClick={handleSyncManuscript}
               disabled={isSyncingManuscript}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-[#2A2016] hover:bg-[#3D2E20] text-[#E0B77D] border border-[#C49A61]/50 font-typewriter text-xs uppercase font-bold tracking-wider transition-all disabled:opacity-50"
-              title="Scan manuscript chapters to extract and register characters"
+              className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-[#2A2016] hover:bg-[#3D2E20] text-[#E0B77D] border border-[#C49A61]/60 font-typewriter text-xs uppercase font-bold tracking-wider transition-all disabled:opacity-50 shadow-sm"
+              title="Scan manuscript chapters to extract and register characters (Alt+C)"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-[#C49A61] ${isSyncingManuscript ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">{isSyncingManuscript ? "Scanning..." : "Sync Chapters"}</span>
+              <span className="px-1.5 py-0.5 rounded bg-[#C49A61]/25 text-[#F5EDE3] border border-[#C49A61]/40 text-[10px] font-mono font-bold">KEY</span>
             </button>
 
             {/* AI Generator Button */}
@@ -1400,6 +1538,32 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
                 <span>{characters.length} Suspects Pinned</span>
                 <span>•</span>
                 <span className="text-[#E5A8A3]">{connections.length} Red Threads</span>
+
+                {/* Auto/Manual Zoom Controls */}
+                <div className="flex items-center space-x-1 pl-2 border-l border-[#382E24]">
+                  <button
+                    onClick={() => setManualZoom(prev => Math.max(0.4, Math.round(((prev !== null ? prev : autoBoardZoom) - 0.1) * 10) / 10))}
+                    className="p-1 text-[#A69482] hover:text-[#F4EDE2] transition-colors"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setManualZoom(null)}
+                    className="px-1 text-[11px] font-mono font-bold text-[#E0B77D] hover:underline"
+                    title={manualZoom !== null ? "Click to reset to Auto Zoom" : "Auto Zoom Active based on suspect density"}
+                  >
+                    {Math.round(boardZoom * 100)}%{manualZoom === null && <span className="text-[9px] text-[#A69482] ml-0.5">(auto)</span>}
+                  </button>
+                  <button
+                    onClick={() => setManualZoom(prev => Math.min(1.5, Math.round(((prev !== null ? prev : autoBoardZoom) + 0.1) * 10) / 10))}
+                    className="p-1 text-[#A69482] hover:text-[#F4EDE2] transition-colors"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
                 <button
                   onClick={() => setIsBoardExpanded(!isBoardExpanded)}
                   className="ml-1 text-[#A69482] hover:text-white p-0.5 transition-colors"
@@ -1408,6 +1572,17 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
                   {isBoardExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
                 </button>
               </div>
+
+              {/* Scalable Inner Stage Container with Smooth Auto/Manual Zoom */}
+              <div
+                className="absolute inset-0 origin-top-left transition-transform duration-200"
+                style={{
+                  width: `${(100 / boardZoom).toFixed(2)}%`,
+                  height: `${(100 / boardZoom).toFixed(2)}%`,
+                  transform: `scale(${boardZoom})`,
+                  transformOrigin: '0 0',
+                }}
+              >
 
               {/* SVG Red Connecting Threads */}
             <svg className="absolute inset-0 w-full h-full pointer-events-none z-10 overflow-visible">
@@ -1453,6 +1628,17 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
 
                 const pathData = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
 
+                const t = (conn.type || 'friends').toLowerCase();
+                const isPossible = conn.confidence === 'Possible Connection' || t === 'possible_connection' || t === 'unknown';
+                const isFamily = t === 'family';
+                const isRomance = t === 'romance' || t === 'romantic';
+                const isConflict = t === 'enemies' || t === 'enemy' || t === 'rival' || t === 'killer_victim';
+                const isMystery = t === 'mystery' || t === 'hidden' || t === 'secret';
+
+                const mainStroke = isPossible ? '#D97706' : isFamily ? '#7F1D1D' : isRomance ? '#BE123C' : isConflict ? '#DC2626' : isMystery ? '#701A75' : '#C0392B';
+                const accentStroke = isPossible ? '#F59E0B' : isFamily ? '#991B1B' : isRomance ? '#F43F5E' : isConflict ? '#EF4444' : isMystery ? '#A21CAF' : '#E74C3C';
+                const dashArray = isPossible ? '4 4' : isConflict ? '8 4' : isMystery ? '6 4' : undefined;
+
                 return (
                   <g key={conn.id} className="transition-opacity">
                     <path
@@ -1466,18 +1652,19 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
                     <path
                       d={pathData}
                       fill="none"
-                      stroke="#C0392B"
-                      strokeWidth={2.4}
+                      stroke={mainStroke}
+                      strokeWidth={2.6}
                       strokeLinecap="round"
+                      strokeDasharray={dashArray}
                       filter="url(#threadShadow)"
                     />
                     <path
                       d={pathData}
                       fill="none"
-                      stroke="#E74C3C"
+                      stroke={accentStroke}
                       strokeWidth={1}
                       strokeOpacity={0.8}
-                      strokeDasharray="4 6"
+                      strokeDasharray={dashArray || '4 6'}
                     />
                     <circle cx={x1} cy={y1} r={3.5} fill="#7A1D15" stroke="#F1C40F" strokeWidth={1} />
                     <circle cx={x2} cy={y2} r={3.5} fill="#7A1D15" stroke="#F1C40F" strokeWidth={1} />
@@ -1867,6 +2054,7 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
                 );
               })}
             </div>
+          </div>
 
             {/* Filtered Empty State Prompt on Board */}
             {characterFilter !== 'all' && filteredCharacters.length === 0 && characters.length > 0 && (
@@ -2167,84 +2355,173 @@ export const CharacterArchive: React.FC<CharacterArchiveProps> = ({
       )}
 
       {/* ── MODAL 2: EDIT OR SEVER RELATIONSHIP THREAD ── */}
-      {editingConnection && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setEditingConnection(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md bg-[#D6C5A9] p-6 rounded-xl border-2 border-[#8F7454] shadow-2xl text-[#2B2117] space-y-4"
+      {editingConnection && (() => {
+        const charA = characters.find(c => c.id === editingConnection.sourceId);
+        const charB = characters.find(c => c.id === editingConnection.targetId);
+        return (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+            onClick={() => setEditingConnection(null)}
           >
-            <div className="flex items-center justify-between border-b border-[#6E5A44]/40 pb-2.5">
-              <div className="flex items-center space-x-1.5">
-                <Scissors className="w-4 h-4 text-[#8A332B]" />
-                <h3 className="font-serif text-xl font-bold text-[#1E1711]">Edit Evidence Thread</h3>
-              </div>
-              <button
-                onClick={() => setEditingConnection(null)}
-                className="text-[#6E5A47] hover:text-black p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 font-typewriter text-xs">
-              <div>
-                <label className="block font-bold uppercase text-[#543F2D] mb-1">
-                  Relationship Label
-                </label>
-                <input
-                  type="text"
-                  value={editingConnection.label}
-                  onChange={(e) => setEditingConnection({ ...editingConnection, label: e.target.value })}
-                  className="w-full px-3 py-2 rounded bg-[#E4D9C3] border border-[#9A846A] text-[#231A13]"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold uppercase text-[#543F2D] mb-1">
-                  Investigative Notes
-                </label>
-                <textarea
-                  rows={2}
-                  value={editingConnection.notes || ''}
-                  onChange={(e) => setEditingConnection({ ...editingConnection, notes: e.target.value })}
-                  className="w-full px-3 py-2 rounded bg-[#E4D9C3] border border-[#9A846A] font-serif text-xs text-[#231A13]"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-[#8F7556]/40 flex items-center justify-between">
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md bg-[#D6C5A9] p-6 rounded-xl border-2 border-[#8F7454] shadow-2xl text-[#2B2117] space-y-4 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-[#6E5A44]/40 pb-2.5">
+                <div className="flex items-center space-x-1.5">
+                  <Scissors className="w-4 h-4 text-[#8A332B]" />
+                  <h3 className="font-serif text-xl font-bold text-[#1E1711]">Edit Evidence Thread</h3>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => handleDeleteConnection(editingConnection.id)}
-                  className="flex items-center space-x-1 px-3 py-1.5 rounded border border-[#8F332B] text-[#8F332B] hover:bg-red-950/10 font-bold uppercase text-xs"
+                  onClick={() => setEditingConnection(null)}
+                  className="text-[#6E5A47] hover:text-black p-1"
                 >
-                  <Scissors className="w-3.5 h-3.5" />
-                  <span>Cut Thread</span>
+                  <X className="w-4 h-4" />
                 </button>
+              </div>
 
+              {/* Characters Involved */}
+              <div className="p-3 rounded-lg bg-[#C5B396] border border-[#9A846A] flex items-center justify-between text-xs font-serif font-bold text-[#1E1711]">
                 <div className="flex items-center space-x-2">
+                  <span className="truncate max-w-[120px]">{charA?.name || editingConnection.sourceId}</span>
+                </div>
+                <span className="font-typewriter text-xs text-[#8A332B] font-bold">⟷</span>
+                <div className="flex items-center space-x-2">
+                  <span className="truncate max-w-[120px]">{charB?.name || editingConnection.targetId}</span>
+                </div>
+              </div>
+
+              <div className="space-y-3 font-typewriter text-xs">
+                {/* Relationship Category */}
+                <div>
+                  <label className="block font-bold uppercase text-[#543F2D] mb-1">
+                    Relationship Category
+                  </label>
+                  <select
+                    value={editingConnection.type || 'friends'}
+                    onChange={(e) => setEditingConnection({ ...editingConnection, type: e.target.value })}
+                    className="w-full px-3 py-2 rounded bg-[#E4D9C3] border border-[#9A846A] text-[#231A13] font-typewriter focus:outline-none"
+                  >
+                    <option value="family">Family (Father, Mother, Sibling, Spouses)</option>
+                    <option value="romance">Romantic (Lovers, Admirers, Partners)</option>
+                    <option value="professional">Professional (Colleagues, Employer, Partners)</option>
+                    <option value="friends">Social / Friends (Companions, Trusted Allies)</option>
+                    <option value="mystery">Mystery (Investigator, Suspect, Accomplice)</option>
+                    <option value="enemies">Conflict / Enemies (Rivals, Opponent, Adversary)</option>
+                    <option value="hidden">Hidden / Secret (Secret Alliance, Undercover)</option>
+                    <option value="possible_connection">Possible Connection (Uncertain / Ambiguous)</option>
+                  </select>
+                </div>
+
+                {/* Relationship Label */}
+                <div>
+                  <label className="block font-bold uppercase text-[#543F2D] mb-1">
+                    Relationship Label
+                  </label>
+                  <input
+                    type="text"
+                    value={editingConnection.label}
+                    onChange={(e) => setEditingConnection({ ...editingConnection, label: e.target.value })}
+                    className="w-full px-3 py-2 rounded bg-[#E4D9C3] border border-[#9A846A] text-[#231A13]"
+                  />
+                </div>
+
+                {/* Supporting Story Evidence Quote (if available) */}
+                {editingConnection.evidence_quote && (
+                  <div className="p-2.5 rounded bg-[#E4D9C3] border border-[#9A846A] space-y-1">
+                    <span className="font-bold uppercase text-[10px] text-[#543F2D] block">
+                      Supporting Manuscript Evidence
+                    </span>
+                    <p className="font-serif italic text-xs text-[#2B2117] leading-relaxed">
+                      "{editingConnection.evidence_quote}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Related Event (if available) */}
+                {editingConnection.related_event && (
+                  <div className="p-2 rounded bg-[#E4D9C3] border border-[#9A846A] text-xs">
+                    <span className="font-bold uppercase text-[10px] text-[#543F2D] block">Related Story Event:</span>
+                    <span className="font-bold text-[#1E1711]">{editingConnection.related_event}</span>
+                  </div>
+                )}
+
+                {/* Investigative Notes */}
+                <div>
+                  <label className="block font-bold uppercase text-[#543F2D] mb-1">
+                    Investigative Continuity Notes
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={editingConnection.notes || ''}
+                    onChange={(e) => setEditingConnection({ ...editingConnection, notes: e.target.value })}
+                    className="w-full px-3 py-2 rounded bg-[#E4D9C3] border border-[#9A846A] font-serif text-xs text-[#231A13]"
+                  />
+                </div>
+
+                {/* Verification Status Controls */}
+                <div>
+                  <label className="block font-bold uppercase text-[#543F2D] mb-1">
+                    Confidence Status
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingConnection({ ...editingConnection, confidence: 'High', verified: true })}
+                      className={`px-2 py-1.5 rounded font-bold uppercase text-[10px] transition-colors ${
+                        editingConnection.confidence === 'High'
+                          ? 'bg-emerald-800 text-white'
+                          : 'bg-[#C5B396] text-[#2B2117] hover:bg-emerald-900/30'
+                      }`}
+                    >
+                      Confirmed (High)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingConnection({ ...editingConnection, confidence: 'Possible Connection', verified: false })}
+                      className={`px-2 py-1.5 rounded font-bold uppercase text-[10px] transition-colors ${
+                        editingConnection.confidence === 'Possible Connection'
+                          ? 'bg-amber-800 text-white'
+                          : 'bg-[#C5B396] text-[#2B2117] hover:bg-amber-900/30'
+                      }`}
+                    >
+                      Mark Uncertain
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-[#8F7556]/40 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => setEditingConnection(null)}
-                    className="px-3 py-1.5 rounded border border-[#6B553E] text-[#2B2117] font-bold uppercase text-xs"
+                    onClick={() => handleDeleteConnection(editingConnection.id)}
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded border border-[#8F332B] text-[#8F332B] hover:bg-red-950/10 font-bold uppercase text-xs"
                   >
-                    Cancel
+                    <Scissors className="w-3.5 h-3.5" />
+                    <span>Cut Thread</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleUpdateConnection}
-                    className="px-4 py-1.5 rounded bg-[#2B2016] text-[#E0B77D] hover:bg-[#3D2D20] font-bold uppercase text-xs shadow"
-                  >
-                    Save
-                  </button>
+
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditingConnection(null)}
+                      className="px-3 py-1.5 rounded border border-[#6B553E] text-[#2B2117] font-bold uppercase text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUpdateConnection}
+                      className="px-4 py-1.5 rounded bg-[#2B2016] text-[#E0B77D] hover:bg-[#3D2D20] font-bold uppercase text-xs shadow"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── MODAL 3: CREATE / EDIT CHARACTER DOSSIER ── */}
       {modalOpen && (

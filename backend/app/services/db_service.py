@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import uuid
 import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -18,8 +20,15 @@ class DatabaseService:
         
         if MONGODB_URI:
             try:
+                import socket
+                # Fast outbound probe: if network is offline or blocked, fail immediately to local store
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.6)
+                s.connect(("8.8.8.8", 53))
+                s.close()
+
                 from pymongo import MongoClient
-                self.mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=2000)
+                self.mongo_client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=1500, connectTimeoutMS=1500)
                 self.mongo_client.server_info()
                 self.db = self.mongo_client[MONGODB_DB_NAME]
                 self.use_mongo = True
@@ -30,6 +39,29 @@ class DatabaseService:
                 
         self.local_file = DATA_DIR / "storyweave_store.json"
         self._init_local_store()
+        if self.use_mongo:
+            threading.Thread(target=self._sync_on_startup, daemon=True).start()
+
+    def _sync_on_startup(self):
+        local_data = self._load_local()
+        # Sync stories from local to Mongo
+        for sid, s in local_data.get("stories", {}).items():
+            try:
+                self.db.stories.replace_one({"id": sid}, s, upsert=True)
+            except Exception:
+                pass
+        # Sync chapters from local to Mongo
+        for cid, c in local_data.get("chapters", {}).items():
+            try:
+                self.db.chapters.replace_one({"id": cid}, c, upsert=True)
+            except Exception:
+                pass
+        # Sync pages from local to Mongo
+        for pid, p in local_data.get("pages", {}).items():
+            try:
+                self.db.pages.replace_one({"id": pid}, p, upsert=True)
+            except Exception:
+                pass
 
     def _init_local_store(self):
         with lock:
@@ -66,43 +98,48 @@ class DatabaseService:
             with open(self.local_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
-    def get_stories(self) -> List[Dict[str, Any]]:
+    def get_stories(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        local_data = self._load_local()
+        stories_map = {s["id"]: s for s in local_data.get("stories", {}).values() if "id" in s}
         if self.use_mongo:
-            stories = list(self.db.stories.find())
-            for s in stories:
-                s.pop("_id", None)
-            return stories
-        data = self._load_local()
-        return list(data["stories"].values())
+            try:
+                for s in self.db.stories.find():
+                    s.pop("_id", None)
+                    if s.get("id"):
+                        stories_map[s["id"]] = s
+            except Exception as e:
+                print(f"[DB Mongo get_stories error] {e}")
+        all_stories = list(stories_map.values())
+        if user_id:
+            return [s for s in all_stories if s.get("user_id") == user_id]
+        return all_stories
 
     def get_story(self, story_id: str) -> Optional[Dict[str, Any]]:
         if self.use_mongo:
-            doc = self.db.stories.find_one({"id": story_id})
-            if doc:
-                doc.pop("_id", None)
-            return doc
+            try:
+                doc = self.db.stories.find_one({"id": story_id})
+                if doc:
+                    doc.pop("_id", None)
+                    return doc
+            except Exception as e:
+                print(f"[DB Mongo get_story error] {e}")
         data = self._load_local()
-        return data["stories"].get(story_id)
+        return data.get("stories", {}).get(story_id)
 
     def save_story(self, story: Dict[str, Any]) -> Dict[str, Any]:
-        if self.use_mongo:
-            self.db.stories.update_one({"id": story["id"]}, {"$set": story}, upsert=True)
-            return story
         data = self._load_local()
+        if "stories" not in data:
+            data["stories"] = {}
         data["stories"][story["id"]] = story
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.stories.replace_one({"id": story["id"]}, story, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_story error] {e}")
         return story
 
     def delete_story(self, story_id: str) -> bool:
-        if self.use_mongo:
-            self.db.stories.delete_one({"id": story_id})
-            self.db.chapters.delete_many({"story_id": story_id})
-            self.db.characters.delete_many({"story_id": story_id})
-            self.db.events.delete_many({"story_id": story_id})
-            self.db.memories.delete_many({"story_id": story_id})
-            self.db.plotholes.delete_many({"story_id": story_id})
-            self.db.boards.delete_one({"story_id": story_id})
-            return True
         data = self._load_local()
         data["stories"].pop(story_id, None)
         data["chapters"] = {k: v for k, v in data["chapters"].items() if v.get("story_id") != story_id}
@@ -113,45 +150,244 @@ class DatabaseService:
         if "boards" in data:
             data["boards"].pop(story_id, None)
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.stories.delete_one({"id": story_id})
+                self.db.chapters.delete_many({"story_id": story_id})
+                self.db.characters.delete_many({"story_id": story_id})
+                self.db.events.delete_many({"story_id": story_id})
+                self.db.memories.delete_many({"story_id": story_id})
+                self.db.plotholes.delete_many({"story_id": story_id})
+                self.db.boards.delete_one({"story_id": story_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_story error] {e}")
         return True
 
     def get_chapters(self, story_id: str) -> List[Dict[str, Any]]:
-        if self.use_mongo:
-            chaps = list(self.db.chapters.find({"story_id": story_id}).sort("chapter_number", 1))
-            for c in chaps:
-                c.pop("_id", None)
-            return chaps
+        chaps_map = {}
         data = self._load_local()
-        chaps = [c for c in data["chapters"].values() if c.get("story_id") == story_id]
+        for c in data.get("chapters", {}).values():
+            if c.get("story_id") == story_id:
+                chaps_map[c["id"]] = c
+        if self.use_mongo:
+            try:
+                m_chaps = list(self.db.chapters.find({"story_id": story_id}).sort("chapter_number", 1))
+                for c in m_chaps:
+                    c.pop("_id", None)
+                    cid = c.get("id")
+                    if cid:
+                        if cid not in chaps_map or len(c.get("content", "")) >= len(chaps_map[cid].get("content", "")):
+                            chaps_map[cid] = c
+            except Exception as e:
+                print(f"[DB Mongo get_chapters error] {e}")
+        chaps = list(chaps_map.values())
         return sorted(chaps, key=lambda x: x.get("chapter_number", 0))
 
     def get_chapter(self, chapter_id: str) -> Optional[Dict[str, Any]]:
+        doc = None
         if self.use_mongo:
-            doc = self.db.chapters.find_one({"id": chapter_id})
-            if doc:
-                doc.pop("_id", None)
-            return doc
+            try:
+                doc = self.db.chapters.find_one({"id": chapter_id})
+                if doc:
+                    doc.pop("_id", None)
+            except Exception as e:
+                print(f"[DB Mongo get_chapter error] {e}")
         data = self._load_local()
-        return data["chapters"].get(chapter_id)
+        local_c = data.get("chapters", {}).get(chapter_id)
+        if doc and local_c:
+            if len(local_c.get("content", "")) > len(doc.get("content", "")):
+                return local_c
+            return doc
+        return doc or local_c
 
     def save_chapter(self, chapter: Dict[str, Any]) -> Dict[str, Any]:
+        cid = chapter.get("id")
+        if cid:
+            existing = self.get_chapter(cid)
+            if existing:
+                existing_c = (existing.get("content") or "").strip()
+                incoming_c = (chapter.get("content") or "").strip()
+                # Manuscript protection: never allow empty/blank placeholder to overwrite non-empty prose
+                if (incoming_c == "" or incoming_c == "<p><br></p>") and (existing_c != "" and existing_c != "<p><br></p>"):
+                    chapter["content"] = existing.get("content")
+
         chapter["word_count"] = len(chapter.get("content", "").split())
         chapter["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.chapters.update_one({"id": chapter["id"]}, {"$set": chapter}, upsert=True)
-            return chapter
+        
+        # Dual-write: Always update local
         data = self._load_local()
+        if "chapters" not in data:
+            data["chapters"] = {}
         data["chapters"][chapter["id"]] = chapter
         self._save_local(data)
+        
+        # Dual-write: Always update Mongo
+        if self.use_mongo:
+            try:
+                self.db.chapters.replace_one({"id": chapter["id"]}, chapter, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_chapter error] {e}")
         return chapter
 
     def delete_chapter(self, chapter_id: str) -> bool:
-        if self.use_mongo:
-            self.db.chapters.delete_one({"id": chapter_id})
-            return True
         data = self._load_local()
-        data["chapters"].pop(chapter_id, None)
+        if "chapters" in data:
+            data["chapters"].pop(chapter_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.chapters.delete_one({"id": chapter_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_chapter error] {e}")
+        return True
+
+    def get_pages(self, chapter_id: str) -> List[Dict[str, Any]]:
+        pages = []
+        if self.use_mongo:
+            try:
+                pages = list(self.db.pages.find({"chapter_id": chapter_id}).sort("page_number", 1))
+                for p in pages:
+                    p.pop("_id", None)
+            except Exception as e:
+                print(f"[DB Mongo get_pages error] {e}")
+        if not pages:
+            data = self._load_local()
+            pages_dict = data.get("pages", {})
+            pages = [p for p in pages_dict.values() if p.get("chapter_id") == chapter_id]
+            pages = sorted(pages, key=lambda x: x.get("page_number", 0))
+
+        # If pages still empty, check chapter embedded pages or parse chapter content
+        if not pages:
+            chap = self.get_chapter(chapter_id)
+            if chap:
+                if chap.get("pages"):
+                    pages = chap.get("pages")
+                    for p in pages:
+                        p_dict = dict(p) if not isinstance(p, dict) else p
+                        p_dict["chapter_id"] = chapter_id
+                        self.save_page(chapter_id, p_dict, sync_chapter=False)
+                elif chap.get("content") and chap.get("content").strip() not in ["", "<p><br></p>"]:
+                    raw_splits = chap["content"].split("<!-- story-page-break -->")
+                    created_pages = []
+                    for idx, raw_p in enumerate(raw_splits):
+                        clean = re.sub(r'<[^>]+>', ' ', raw_p)
+                        p_obj = {
+                            "id": f"page_{chapter_id}_{idx+1}",
+                            "chapter_id": chapter_id,
+                            "page_number": idx + 1,
+                            "content": raw_p,
+                            "word_count": len(clean.split()),
+                            "save_status": "saved",
+                            "created_at": chap.get("created_at") or datetime.utcnow().isoformat(),
+                            "updated_at": chap.get("updated_at") or datetime.utcnow().isoformat()
+                        }
+                        self.save_page(chapter_id, p_obj, sync_chapter=False)
+                        created_pages.append(p_obj)
+                    pages = created_pages
+
+        return sorted(pages, key=lambda x: x.get("page_number", 0))
+
+    def get_page(self, chapter_id: str, page_id: str) -> Optional[Dict[str, Any]]:
+        if self.use_mongo:
+            try:
+                doc = self.db.pages.find_one({"id": page_id, "chapter_id": chapter_id})
+                if doc:
+                    doc.pop("_id", None)
+                    return doc
+            except Exception as e:
+                print(f"[DB Mongo get_page error] {e}")
+        data = self._load_local()
+        pages_dict = data.get("pages", {})
+        p = pages_dict.get(page_id)
+        if p:
+            return p
+        # Check embedded in chapter
+        chap = self.get_chapter(chapter_id)
+        if chap and chap.get("pages"):
+            for embedded in chap["pages"]:
+                if embedded.get("id") == page_id:
+                    return embedded
+        return None
+
+    def create_page(self, chapter_id: str, page_data: Dict[str, Any]) -> Dict[str, Any]:
+        page_id = page_data.get("id") or f"page_{uuid.uuid4().hex[:10]}"
+        content = page_data.get("content", "")
+        clean_text = re.sub(r'<[^>]+>', ' ', content)
+        words = len(clean_text.split())
+        page = {
+            "id": page_id,
+            "chapter_id": chapter_id,
+            "page_number": page_data.get("page_number", 1),
+            "content": content,
+            "word_count": words,
+            "save_status": page_data.get("save_status", "saved"),
+            "created_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        return self.save_page(chapter_id, page, sync_chapter=True)
+
+    def save_page(self, chapter_id: str, page: Dict[str, Any], sync_chapter: bool = True) -> Dict[str, Any]:
+        pid = page.get("id")
+        if pid:
+            existing_p = self.get_page(chapter_id, pid)
+            if existing_p:
+                existing_c = (existing_p.get("content") or "").strip()
+                incoming_c = (page.get("content") or "").strip()
+                if (incoming_c == "" or incoming_c == "<p><br></p>") and (existing_c != "" and existing_c != "<p><br></p>"):
+                    page["content"] = existing_p.get("content")
+
+        content = page.get("content", "")
+        clean_text = re.sub(r'<[^>]+>', ' ', content)
+        page["word_count"] = len(clean_text.split())
+        page["updated_at"] = datetime.utcnow().isoformat()
+        if not page.get("created_at"):
+            page["created_at"] = datetime.utcnow().isoformat()
+        if not page.get("chapter_id"):
+            page["chapter_id"] = chapter_id
+
+        # Dual-write: Always write to local
+        data = self._load_local()
+        if "pages" not in data:
+            data["pages"] = {}
+        data["pages"][page["id"]] = page
         self._save_local(data)
+
+        # Dual-write: Always write to Mongo
+        if self.use_mongo:
+            try:
+                self.db.pages.replace_one({"id": page["id"]}, page, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_page error] {e}")
+
+        if sync_chapter:
+            self._sync_chapter_from_pages(chapter_id)
+
+        return page
+
+    def _sync_chapter_from_pages(self, chapter_id: str):
+        chapter = self.get_chapter(chapter_id)
+        if not chapter:
+            return
+        pages = self.get_pages(chapter_id)
+        if pages:
+            non_empty_pages = [p.get("content", "") for p in pages if p.get("content") and p.get("content").strip() not in ["", "<p><br></p>"]]
+            if non_empty_pages:
+                combined_content = "<!-- story-page-break -->".join(non_empty_pages)
+                chapter["content"] = combined_content
+            chapter["pages"] = pages
+            self.save_chapter(chapter)
+
+    def delete_page(self, chapter_id: str, page_id: str) -> bool:
+        data = self._load_local()
+        if "pages" in data and page_id in data["pages"]:
+            data["pages"].pop(page_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.pages.delete_one({"id": page_id, "chapter_id": chapter_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_page error] {e}")
+        self._sync_chapter_from_pages(chapter_id)
         return True
 
 
@@ -194,21 +430,28 @@ class DatabaseService:
 
     def save_character(self, character: Dict[str, Any]) -> Dict[str, Any]:
         character["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.characters.update_one({"id": character["id"]}, {"$set": character}, upsert=True)
-            return self._normalize_character(character)
         data = self._load_local()
+        if "characters" not in data:
+            data["characters"] = {}
         data["characters"][character["id"]] = character
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.characters.replace_one({"id": character["id"]}, character, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_character error] {e}")
         return self._normalize_character(character)
 
     def delete_character(self, character_id: str) -> bool:
-        if self.use_mongo:
-            self.db.characters.delete_one({"id": character_id})
-            return True
         data = self._load_local()
-        data["characters"].pop(character_id, None)
-        self._save_local(data)
+        if "characters" in data and character_id in data["characters"]:
+            data["characters"].pop(character_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.characters.delete_one({"id": character_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_character error] {e}")
         return True
 
     def get_events(self, story_id: str) -> List[Dict[str, Any]]:
@@ -216,28 +459,36 @@ class DatabaseService:
             evts = list(self.db.events.find({"story_id": story_id}).sort("chronological_position", 1))
             for e in evts:
                 e.pop("_id", None)
-            return evts
+            if evts:
+                return evts
         data = self._load_local()
         evts = [e for e in data["events"].values() if e.get("story_id") == story_id]
         return sorted(evts, key=lambda x: (x.get("chronological_position", 0), x.get("event_number", 0)))
 
     def save_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
         event["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.events.update_one({"id": event["id"]}, {"$set": event}, upsert=True)
-            return event
         data = self._load_local()
+        if "events" not in data:
+            data["events"] = {}
         data["events"][event["id"]] = event
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.events.replace_one({"id": event["id"]}, event, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_event error] {e}")
         return event
 
     def delete_event(self, event_id: str) -> bool:
-        if self.use_mongo:
-            self.db.events.delete_one({"id": event_id})
-            return True
         data = self._load_local()
-        data["events"].pop(event_id, None)
-        self._save_local(data)
+        if "events" in data and event_id in data["events"]:
+            data["events"].pop(event_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.events.delete_one({"id": event_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_event error] {e}")
         return True
 
     def get_memories(self, story_id: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -257,21 +508,28 @@ class DatabaseService:
 
     def save_memory(self, memory: Dict[str, Any]) -> Dict[str, Any]:
         memory["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.memories.update_one({"id": memory["id"]}, {"$set": memory}, upsert=True)
-            return memory
         data = self._load_local()
+        if "memories" not in data:
+            data["memories"] = {}
         data["memories"][memory["id"]] = memory
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.memories.replace_one({"id": memory["id"]}, memory, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_memory error] {e}")
         return memory
 
     def delete_memory(self, memory_id: str) -> bool:
-        if self.use_mongo:
-            self.db.memories.delete_one({"id": memory_id})
-            return True
         data = self._load_local()
-        data["memories"].pop(memory_id, None)
-        self._save_local(data)
+        if "memories" in data and memory_id in data["memories"]:
+            data["memories"].pop(memory_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.memories.delete_one({"id": memory_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_memory error] {e}")
         return True
 
     def get_plotholes(self, story_id: str) -> List[Dict[str, Any]]:
@@ -279,27 +537,35 @@ class DatabaseService:
             issues = list(self.db.plotholes.find({"story_id": story_id}))
             for i in issues:
                 i.pop("_id", None)
-            return issues
+            if issues:
+                return issues
         data = self._load_local()
         return [i for i in data["plotholes"].values() if i.get("story_id") == story_id]
 
     def save_plothole(self, issue: Dict[str, Any]) -> Dict[str, Any]:
         issue["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.plotholes.update_one({"id": issue["id"]}, {"$set": issue}, upsert=True)
-            return issue
         data = self._load_local()
+        if "plotholes" not in data:
+            data["plotholes"] = {}
         data["plotholes"][issue["id"]] = issue
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.plotholes.replace_one({"id": issue["id"]}, issue, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_plothole error] {e}")
         return issue
 
     def delete_plothole(self, issue_id: str) -> bool:
-        if self.use_mongo:
-            self.db.plotholes.delete_one({"id": issue_id})
-            return True
         data = self._load_local()
-        data["plotholes"].pop(issue_id, None)
-        self._save_local(data)
+        if "plotholes" in data and issue_id in data["plotholes"]:
+            data["plotholes"].pop(issue_id, None)
+            self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.plotholes.delete_one({"id": issue_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_plothole error] {e}")
         return True
 
     def get_board(self, story_id: str) -> Optional[Dict[str, Any]]:
@@ -315,14 +581,16 @@ class DatabaseService:
         payload = dict(board_data)
         payload["story_id"] = story_id
         payload["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.boards.update_one({"story_id": story_id}, {"$set": payload}, upsert=True)
-            return payload
         data = self._load_local()
         if "boards" not in data:
             data["boards"] = {}
         data["boards"][story_id] = payload
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.boards.replace_one({"story_id": story_id}, payload, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_board error] {e}")
         return payload
 
 
@@ -339,14 +607,16 @@ class DatabaseService:
         payload = dict(board_data)
         payload["story_id"] = story_id
         payload["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.investigation_boards.update_one({"story_id": story_id}, {"$set": payload}, upsert=True)
-            return payload
         data = self._load_local()
         if "investigation_boards" not in data:
             data["investigation_boards"] = {}
         data["investigation_boards"][story_id] = payload
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.investigation_boards.replace_one({"story_id": story_id}, payload, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_investigation_board error] {e}")
         return payload
 
     def get_culprit(self, story_id: str) -> Optional[Dict[str, Any]]:
@@ -362,24 +632,28 @@ class DatabaseService:
         payload = dict(culprit_data)
         payload["story_id"] = story_id
         payload["updated_at"] = datetime.utcnow().isoformat()
-        if self.use_mongo:
-            self.db.culprits.update_one({"story_id": story_id}, {"$set": payload}, upsert=True)
-            return payload
         data = self._load_local()
         if "culprits" not in data:
             data["culprits"] = {}
         data["culprits"][story_id] = payload
         self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.culprits.replace_one({"story_id": story_id}, payload, upsert=True)
+            except Exception as e:
+                print(f"[DB Mongo save_culprit error] {e}")
         return payload
 
     def delete_culprit(self, story_id: str) -> bool:
-        if self.use_mongo:
-            self.db.culprits.delete_one({"story_id": story_id})
-            return True
         data = self._load_local()
         if "culprits" in data:
             data["culprits"].pop(story_id, None)
             self._save_local(data)
+        if self.use_mongo:
+            try:
+                self.db.culprits.delete_one({"story_id": story_id})
+            except Exception as e:
+                print(f"[DB Mongo delete_culprit error] {e}")
         return True
 
     def batch_consolidate_characters(

@@ -1,4 +1,4 @@
-# StoryWeave AI — Investigative Storytelling Studio & Universe Intelligence
+# Mythora — Investigative Storytelling Studio & Universe Intelligence
 
 > An immersive, tactical AI authoring and narrative world-building platform inspired by investigative journals and evidence boards, reinterpreted for fiction writers across **Mystery, Horror, Fantasy, Sci-Fi, Adventure, and Drama**.
 

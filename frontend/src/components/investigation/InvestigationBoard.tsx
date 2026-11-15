@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useStory } from '../../context/StoryContext';
 import { api } from '../../services/api';
 import { sound } from '../../services/audioService';
@@ -46,13 +46,19 @@ import {
   HelpCircle,
   FolderOpen,
   ArrowRight,
+  ArrowLeftRight,
   BookOpen,
   Move,
   Lock,
   Unlock,
   Check,
   RefreshCw,
-  LayoutGrid
+  LayoutGrid,
+  Share2,
+  Quote,
+  Calendar,
+  MessageSquare,
+  Bot
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -149,6 +155,58 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
     status: 'unverified'
   });
 
+  // Detective AI Interactive Chat
+  const [showDetectiveChat, setShowDetectiveChat] = useState<boolean>(false);
+  const [chatQuery, setChatQuery] = useState<string>('');
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    sender: 'user' | 'detective';
+    text: string;
+    citations?: string[];
+    confidence?: string;
+    highlightCardIds?: string[];
+  }>>([
+    {
+      sender: 'detective',
+      text: 'Detective Vance reporting. The corkboard has been reconstructed with verified manuscript leads, character profiles, chronological events, and forensic sticky notes. Ask me any question about clues, motives, contradictions, or timeline gaps.',
+      confidence: 'CONFIRMED FACT'
+    }
+  ]);
+
+  const handleSendChat = async (queryText?: string) => {
+    const q = (queryText || chatQuery).trim();
+    if (!q || !activeStory?.id) return;
+
+    const userMsg = { sender: 'user' as const, text: q };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatQuery('');
+    setChatLoading(true);
+    sound.playTypewriterKeystroke();
+
+    try {
+      const res = await api.investigationBoardChat(activeStory.id, q, selectedCardId || undefined);
+      setChatMessages(prev => [...prev, {
+        sender: 'detective',
+        text: res.answer,
+        citations: res.citations,
+        confidence: res.confidence,
+        highlightCardIds: res.highlight_card_ids
+      }]);
+      sound.playPaperRustle();
+      if (res.highlight_card_ids && res.highlight_card_ids.length > 0) {
+        setSelectedCardId(res.highlight_card_ids[0]);
+      }
+    } catch (err: any) {
+      setChatMessages(prev => [...prev, {
+        sender: 'detective',
+        text: `Investigative lead stalled: ${err.message || 'Unable to retrieve canon evidence.'}`,
+        confidence: 'INSUFFICIENT EVIDENCE'
+      }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   // Pan & Zoom
   const [zoom, setZoom] = useState<number>(1.0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -165,14 +223,176 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
   const historyIndexRef = useRef<number>(-1);
   const isHistoryUpdateRef = useRef<boolean>(false);
 
-  // Hover state for highlighting connected cluster
   // Hover state for highlighting connected cluster and foreground elevation
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
+  const [activeHoverCardId, setActiveHoverCardId] = useState<string | null>(null);
   const [hoveredConnectionId, setHoveredConnectionId] = useState<string | null>(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<any>(null);
 
   // Debounce save timer
   const saveTimerRef = useRef<any>(null);
+
+  // Stable reference to latest boardState to ensure zero-lag drag/save consistency
+  const boardStateRef = useRef<InvestigationBoardState>(boardState);
+  useEffect(() => {
+    boardStateRef.current = boardState;
+  }, [boardState]);
+
+  // Robust card finder matching either board element id or stable character id
+  const findCard = useCallback((idOrCharId: string | undefined) => {
+    if (!idOrCharId) return null;
+    return boardState.elements.find(e =>
+      e.id === idOrCharId ||
+      (e.type === 'character' && e.metadata?.character_id === idOrCharId)
+    );
+  }, [boardState.elements]);
+
+  // Hover coordinator for smooth transitions without flickering
+  const handleCardMouseEnter = useCallback((card: InvestigationCard) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredCardId(card.id);
+    // Hover-based threading reveal applies specifically to character dossiers
+    if (card.type === 'character') {
+      setActiveHoverCardId(card.id);
+    }
+  }, []);
+
+  const handleCardMouseLeave = useCallback((card: InvestigationCard) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredCardId(prev => (prev === card.id ? null : prev));
+      setActiveHoverCardId(prev => (prev === card.id ? null : prev));
+    }, 140);
+  }, []);
+
+  const handleThreadMouseEnter = useCallback((conn: InvestigationConnection) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredConnectionId(conn.id);
+    const sId = conn.source_id || (conn as any).sourceId;
+    const tId = conn.target_id || (conn as any).targetId;
+    const sCard = findCard(sId);
+    const tCard = findCard(tId);
+
+    // Keep the active hover card context alive if cursor came from either connected card
+    setActiveHoverCardId(prev => {
+      if (prev && (prev === sCard?.id || prev === tCard?.id)) {
+        return prev;
+      }
+      return prev || sCard?.id || tCard?.id || null;
+    });
+  }, [findCard]);
+
+  const handleThreadMouseLeave = useCallback((conn: InvestigationConnection) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredConnectionId(prev => (prev === conn.id ? null : prev));
+      setActiveHoverCardId(null);
+      setHoveredCardId(null);
+    }, 140);
+  }, []);
+
+  const handleBoardMouseLeave = useCallback(() => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredCardId(null);
+    setActiveHoverCardId(null);
+    setHoveredConnectionId(null);
+    setHoveredMarkerId(null);
+  }, []);
+
+  // Visual styling mapped to established narrative relationship types
+  const getThreadVisuals = (
+    type: string | undefined,
+    isContradiction: boolean,
+    isHigh: boolean,
+    isHov: boolean,
+    confidence?: string
+  ) => {
+    const t = (type || 'relation').toLowerCase();
+    const isPossible = confidence === 'Possible Connection' || t === 'possible_connection' || t === 'unknown';
+
+    if (isContradiction || t === 'contradiction') {
+      return {
+        stroke: isHov ? '#FF2A2A' : '#E53E3E',
+        width: isHigh ? 4.2 : 2.8,
+        dash: '6,4'
+      };
+    }
+    if (t === 'family') {
+      return {
+        stroke: isHov ? '#991B1B' : '#7F1D1D', // Deep burgundy / warm wine red
+        width: isHigh ? 4.2 : 2.8,
+        dash: undefined
+      };
+    }
+    if (t === 'romance' || t === 'romantic') {
+      return {
+        stroke: isHov ? '#F43F5E' : '#BE123C', // Rose / crimson
+        width: isHigh ? 4.0 : 2.6,
+        dash: undefined
+      };
+    }
+    if (t === 'enemies' || t === 'enemy' || t === 'rival' || t === 'killer_victim') {
+      return {
+        stroke: isHov ? '#EF4444' : '#DC2626', // Scarlet red dashed
+        width: isHigh ? 4.0 : 2.6,
+        dash: '8,4'
+      };
+    }
+    if (t === 'friends' || t === 'social' || t === 'allies' || t === 'ally') {
+      return {
+        stroke: isHov ? '#FB7185' : '#E11D48', // Coral / red
+        width: isHigh ? 3.8 : 2.4,
+        dash: undefined
+      };
+    }
+    if (t === 'colleagues' || t === 'professional' || t === 'mentor') {
+      return {
+        stroke: isHov ? '#E11D48' : '#881337', // Slate crimson
+        width: isHigh ? 3.6 : 2.3,
+        dash: undefined
+      };
+    }
+    if (t === 'mystery' || t === 'hidden' || t === 'secret') {
+      return {
+        stroke: isHov ? '#A21CAF' : '#701A75', // Violet crimson dashed
+        width: isHigh ? 3.6 : 2.3,
+        dash: '6,4'
+      };
+    }
+    if (t === 'timeline' || t === 'event') {
+      return {
+        stroke: isHov ? '#F59E0B' : '#B45309', // Warm amber / brass timeline incident thread
+        width: isHigh ? 3.8 : 2.4,
+        dash: '6,3'
+      };
+    }
+    if (isPossible) {
+      return {
+        stroke: isHov ? '#F59E0B' : '#D97706', // Light amber / gold dashed
+        width: isHigh ? 3.2 : 2.0,
+        dash: '4,4'
+      };
+    }
+    return {
+      stroke: isHov ? '#EF4444' : '#B91C1C',
+      width: isHigh ? 3.8 : 2.4,
+      dash: undefined
+    };
+  };
 
   // 1. Initial Load of Board & Issues
   const loadBoardData = useCallback(async (storyId: string) => {
@@ -184,7 +404,12 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
       ]);
 
       setBoardState(boardRes);
-      setZoom(boardRes.zoom || 1.0);
+      const charCards = (boardRes.elements || []).filter(el => el.type === 'character');
+      const shouldAutoZoom = (!boardRes.zoom || boardRes.zoom === 1.0) && charCards.length > 4;
+      const initialZoom = shouldAutoZoom
+        ? (charCards.length <= 6 ? 0.9 : charCards.length <= 8 ? 0.8 : 0.7)
+        : (boardRes.zoom || 1.0);
+      setZoom(initialZoom);
       setPan(boardRes.pan_offset || { x: 0, y: 0 });
       setIssues(issuesRes);
 
@@ -278,6 +503,12 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
       sound.playTypewriterKeystroke();
       const generated = await api.generateInvestigationBoard(activeStory.id);
       setBoardState(generated);
+      const charCards = (generated.elements || []).filter(el => el.type === 'character');
+      if (charCards.length > 4) {
+        setZoom(charCards.length <= 6 ? 0.9 : charCards.length <= 8 ? 0.8 : 0.7);
+      } else {
+        setZoom(1.0);
+      }
       pushHistory(generated);
       setSaveStatus('saved');
       sound.playPaperRustle();
@@ -335,6 +566,43 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
       addToast('Incremental Scan Failed', err.message, 'error');
     } finally {
       setIncrementalAnalyzing(false);
+    }
+  };
+
+  // AI Story Threading Handler
+  const [isAiThreading, setIsAiThreading] = useState<boolean>(false);
+
+  const handleCreateAiThreading = async () => {
+    if (!activeStory?.id) return;
+    try {
+      setIsAiThreading(true);
+      sound.playTypewriterKeystroke();
+      const res = await api.autoConnectStoryBoard(activeStory.id);
+      const refreshedBoard = await api.getInvestigationBoard(activeStory.id);
+      setBoardState(refreshedBoard);
+      pushHistory(refreshedBoard);
+      sound.playPaperRustle();
+      const added = res.added_count ?? 0;
+      const total = res.total_connections ?? refreshedBoard.connections?.length ?? 0;
+      if (added > 0) {
+        addToast(
+          'AI Threading Complete',
+          `Discovered and connected ${added} relationship thread${added === 1 ? '' : 's'} based on the story manuscript.`,
+          'success'
+        );
+      } else if (total > 0) {
+        addToast(
+          'AI Threading Verified',
+          `All ${total} character relationship thread${total === 1 ? '' : 's'} are mapped and verified from the story.`,
+          'info'
+        );
+      } else {
+        addToast('AI Threading', 'No explicit character relationships found in saved chapters yet.', 'info');
+      }
+    } catch (err: any) {
+      addToast('Threading Error', err.message || 'Failed to analyze and connect character relationships.', 'error');
+    } finally {
+      setIsAiThreading(false);
     }
   };
 
@@ -513,8 +781,8 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
   const handleMouseUp = () => {
     if (draggingCardId) {
       setDraggingCardId(null);
-      pushHistory(boardState);
-      scheduleSave(boardState);
+      pushHistory(boardStateRef.current);
+      scheduleSave(boardStateRef.current);
     }
     if (isPanning) {
       setIsPanning(false);
@@ -530,7 +798,9 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
   };
 
   const handleResetView = () => {
-    setZoom(1.0);
+    const charCards = (boardState.elements || []).filter(el => el.type === 'character');
+    const targetZoom = charCards.length <= 4 ? 1.0 : charCards.length <= 6 ? 0.9 : charCards.length <= 8 ? 0.8 : 0.7;
+    setZoom(targetZoom);
     setPan({ x: 0, y: 0 });
     sound.playPaperRustle();
   };
@@ -697,15 +967,77 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
     addToast('Dossier Exported', 'Downloaded complete investigation markdown report.', 'success');
   };
 
-  // Connected card helpers
-  const getConnectedElementIds = (cardId: string): string[] => {
+  // Connected card helpers matching both element id and stable character id
+  const getConnectedElementIds = useCallback((cardId: string): string[] => {
     const ids = new Set<string>();
+    const card = findCard(cardId);
+    const charId = card?.metadata?.character_id;
     boardState.connections.forEach(c => {
-      if (c.source_id === cardId) ids.add(c.target_id);
-      if (c.target_id === cardId) ids.add(c.source_id);
+      const sId = c.source_id || (c as any).sourceId;
+      const tId = c.target_id || (c as any).targetId;
+      const matchSource = sId === cardId || (charId && sId === charId);
+      const matchTarget = tId === cardId || (charId && tId === charId);
+      if (matchSource) {
+        const targetCard = findCard(tId);
+        if (targetCard) ids.add(targetCard.id);
+      }
+      if (matchTarget) {
+        const sourceCard = findCard(sId);
+        if (sourceCard) ids.add(sourceCard.id);
+      }
     });
     return Array.from(ids);
-  };
+  }, [boardState.connections, findCard]);
+
+  // Check whether a connection is actively highlighted by hover or selection
+  const isConnectionHighlighted = useCallback((conn: InvestigationConnection): boolean => {
+    // 1. If user clicked/selected this specific connection
+    if (selectedConnectionId === conn.id) return true;
+
+    // 2. If user hovered this connection directly
+    if (hoveredConnectionId === conn.id) return true;
+
+    const sId = conn.source_id || (conn as any).sourceId;
+    const tId = conn.target_id || (conn as any).targetId;
+    const sCard = findCard(sId);
+    const tCard = findCard(tId);
+
+    // 3. If a character card is hovered (Dossier feature)
+    if (activeHoverCardId) {
+      const activeCard = findCard(activeHoverCardId);
+      const activeElemId = activeCard?.id || activeHoverCardId;
+      const activeCharId = activeCard?.metadata?.character_id;
+
+      const isConnAttached =
+        sId === activeElemId ||
+        sCard?.id === activeElemId ||
+        (activeCharId && (sId === activeCharId || sCard?.metadata?.character_id === activeCharId)) ||
+        tId === activeElemId ||
+        tCard?.id === activeElemId ||
+        (activeCharId && (tId === activeCharId || tCard?.metadata?.character_id === activeCharId));
+
+      return Boolean(isConnAttached);
+    }
+
+    // 4. If a card is selected (clicked)
+    if (selectedCardId) {
+      const selCard = findCard(selectedCardId);
+      const selElemId = selCard?.id || selectedCardId;
+      const selCharId = selCard?.metadata?.character_id;
+
+      const isConnAttached =
+        sId === selElemId ||
+        sCard?.id === selElemId ||
+        (selCharId && (sId === selCharId || sCard?.metadata?.character_id === selCharId)) ||
+        tId === selElemId ||
+        tCard?.id === selElemId ||
+        (selCharId && (tId === selCharId || tCard?.metadata?.character_id === selCharId));
+
+      return Boolean(isConnAttached);
+    }
+
+    return false;
+  }, [selectedConnectionId, hoveredConnectionId, activeHoverCardId, selectedCardId, findCard]);
 
   // Filtering cards
   const filteredElements = boardState.elements.filter(el => {
@@ -725,10 +1057,14 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
   const selectedConnection = boardState.connections.find(c => c.id === selectedConnectionId);
   const selectedIssue = issues.find(i => i.id === selectedIssueId);
 
-  // Connected ids for currently focused card (selected or hovered)
   // Connected ids for currently focused card (selected or culprit focus)
   const activeFocusCardId = selectedCardId || (highlightCulpritOnly ? boardState.culprit_id : null);
   const activeConnectedIds = activeFocusCardId ? getConnectedElementIds(activeFocusCardId) : [];
+
+  // Connected ids for hovered character card (subtle highlight)
+  const hoveredConnectedCardIds = useMemo(() => {
+    return activeHoverCardId ? getConnectedElementIds(activeHoverCardId) : [];
+  }, [activeHoverCardId, getConnectedElementIds]);
 
   // Statistics
   const criticalCount = issues.filter(i => i.severity === 'Critical' && i.status === 'open').length;
@@ -790,6 +1126,18 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
             {auditing ? 'Auditing Canon...' : 'Analyze Plot Holes'}
           </button>
 
+          {/* CREATE AI THREADING Button */}
+          <button
+            type="button"
+            onClick={handleCreateAiThreading}
+            disabled={isAiThreading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2B1714] hover:bg-[#3D1E1A] border border-[#8C2E24] hover:border-[#C0392B] text-[#F3A49E] text-xs font-typewriter font-bold uppercase transition-colors shadow"
+            title="Deeply analyze story chapters & events to map authentic relationship red threads"
+          >
+            <Share2 className={`w-3.5 h-3.5 text-[#E74C3C] ${isAiThreading ? 'animate-spin' : ''}`} />
+            <span>{isAiThreading ? 'Threading Story...' : 'Create AI Threading'}</span>
+          </button>
+
           {/* Incremental Scan */}
           <button
             type="button"
@@ -828,6 +1176,17 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
           >
             <Crosshair className="w-3.5 h-3.5" />
             Culprit Focus
+          </button>
+
+          {/* Ask Detective AI Button */}
+          <button
+            type="button"
+            onClick={() => setShowDetectiveChat(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-typewriter font-bold uppercase transition-all border bg-gradient-to-r from-[#201812] to-[#2E2016] hover:from-[#2C2119] hover:to-[#3E2C20] text-[#E0B77D] border-[#C49A61]/60 hover:border-[#C49A61] shadow hover:shadow-amber-900/20 active:scale-95"
+            title="Open Interactive Forensic Detective Assistant"
+          >
+            <Bot className="w-3.5 h-3.5 text-[#C49A61]" />
+            Ask Detective
           </button>
 
           {/* Undo / Redo */}
@@ -1167,6 +1526,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
           onMouseDown={handleBoardMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
+          onMouseLeave={handleBoardMouseLeave}
           className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
           style={{
             backgroundColor: '#1E1712',
@@ -1196,17 +1556,17 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
             }}
           >
 
-                        {/* -------------------------------------------------------------------
+            {/* -------------------------------------------------------------------
                 LAYER 3: CHARACTER CARDS & EVIDENCE CARDS
-                Resting: zIndex 20, translateZ(20px)
-                Hovered: zIndex 100, translateZ(48px) -> Brought to front above threads (30) and pins (40)
-                Selected: zIndex 90, translateZ(38px)
-                Dragging: zIndex 120, translateZ(60px)
+                Stacking Order: Cards resting at zIndex 20, translateZ(10px)
+                Hovered: zIndex 30, translateZ(18px)
+                Threads and markers rendered strictly ABOVE in Layer 4 (zIndex 60/70)
                 ------------------------------------------------------------------- */}
             {boardState.elements.map(card => {
               const isSelected = selectedCardId === card.id;
               const isDragging = draggingCardId === card.id;
-              const isHovered = hoveredCardId === card.id;
+              const isCardHovered = hoveredCardId === card.id || activeHoverCardId === card.id;
+              const isCardConnectedHovered = hoveredConnectedCardIds.includes(card.id);
               const isCulprit = card.is_culprit || card.id === boardState.culprit_id;
               const isConnected = activeConnectedIds.includes(card.id);
               const isFocused = isSelected || isConnected;
@@ -1239,14 +1599,14 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                 else cardContainerStyle = 'bg-[#FFF9C4] text-[#221B0F] border border-[#D4C379]';
               }
 
-              const cardZIndex = isDragging ? 120 : isHovered ? 100 : isSelected ? 90 : 20;
+              const cardZIndex = isDragging ? 120 : isCardHovered ? 100 : isSelected ? 80 : 20;
               const cardTranslateZ = isDragging
-                ? 'translateZ(60px)'
-                : isHovered
-                ? 'translateZ(48px)'
+                ? 'translateZ(65px)'
+                : isCardHovered
+                ? 'translateZ(50px) scale(1.025)'
                 : isSelected
-                ? 'translateZ(38px)'
-                : 'translateZ(20px)';
+                ? 'translateZ(25px)'
+                : 'translateZ(10px)';
 
               return (
                 <div
@@ -1254,15 +1614,14 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                   id={`card_${card.id}`}
                   data-card-id={card.id}
                   onMouseDown={(e) => handleCardMouseDown(e, card)}
-                  onMouseEnter={() => {
-                    setHoveredCardId(card.id);
-                    setHoveredConnectionId(null);
-                  }}
-                  onMouseLeave={() => setHoveredCardId(prev => (prev === card.id ? null : prev))}
+                  onMouseEnter={() => handleCardMouseEnter(card)}
+                  onMouseLeave={() => handleCardMouseLeave(card)}
                   className={`investigation-card absolute rounded select-none group cursor-grab active:cursor-grabbing transition-all duration-200 ${cardContainerStyle} ${
                     isDimmed ? 'opacity-35 grayscale-[50%]' : 'opacity-100'
                   } ${
                     isSelected ? 'ring-4 ring-[#C49A61]' : ''
+                  } ${
+                    isCardConnectedHovered && !isSelected ? 'ring-2 ring-[#C49A61]/70 shadow-[0_0_22px_rgba(196,154,97,0.4)]' : ''
                   }`}
                   style={{
                     left: `${card.position.x}px`,
@@ -1271,7 +1630,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                     minHeight: `${CARD_HEIGHT}px`,
                     transformStyle: 'preserve-3d',
                     transform: cardTranslateZ,
-                    boxShadow: isHovered || isSelected
+                    boxShadow: isCardHovered || isSelected
                       ? '0 26px 48px -8px rgba(0,0,0,0.85), 0 14px 24px -5px rgba(0,0,0,0.7)'
                       : '0 12px 28px -5px rgba(0,0,0,0.7), 0 6px 12px -4px rgba(0,0,0,0.5)',
                     zIndex: cardZIndex,
@@ -1345,6 +1704,18 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                           <span className="font-typewriter text-[9px] text-[#7A6451] uppercase tracking-widest block font-bold">
                             {card.subtitle || 'SUSPECT DOSSIER'}
                           </span>
+                          {card.metadata?.importance_score !== undefined && (
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="px-1.5 py-0.5 rounded text-[8px] font-typewriter font-bold bg-[#A82E25]/15 text-[#8A2B20] border border-[#8A2B20]/30">
+                                Score: {card.metadata.importance_score}/100
+                              </span>
+                              {card.metadata.classifications?.[0] && (
+                                <span className="px-1.5 py-0.5 rounded text-[8px] font-typewriter text-[#5A4533] bg-[#E8DECE] border border-[#C2B18E] truncate max-w-[90px]">
+                                  {card.metadata.classifications[0]}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {card.description && (
                             <p className="font-serif text-[11px] text-[#3D3024] leading-snug line-clamp-2 mt-1">
                               {card.description}
@@ -1535,16 +1906,17 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
 
             {/* -------------------------------------------------------------------
                 LAYER 4: RED INVESTIGATION THREAD LINES
-                Resting: zIndex 30, translateZ(28px) -> In foreground of resting cards (zIndex 20)
-                Hovered connection: zIndex 110 -> Brought to front on hover with glow & label
+                Stacking Order: Rendered in a layer strictly ABOVE the character cards (zIndex: 60/70, translateZ: 26px)
+                Hover-Based Visibility: Revealed smoothly above cards when cursor hovers over a
+                connected character card (Dossier function) or connected thread. Unrelated threads hidden.
                 ------------------------------------------------------------------- */}
             <svg
               className="absolute inset-0 pointer-events-none"
               style={{
                 width: '4000px',
                 height: '3000px',
-                zIndex: hoveredConnectionId ? 110 : 30,
-                transform: 'translateZ(28px)'
+                zIndex: activeHoverCardId || hoveredConnectionId ? 70 : 60,
+                transform: 'translateZ(26px)'
               }}
             >
               <defs>
@@ -1564,8 +1936,8 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
 
               {/* Draw All Red String Connections */}
               {boardState.connections.map(conn => {
-                const sourceCard = boardState.elements.find(e => e.id === conn.source_id);
-                const targetCard = boardState.elements.find(e => e.id === conn.target_id);
+                const sourceCard = findCard(conn.source_id || (conn as any).sourceId);
+                const targetCard = findCard(conn.target_id || (conn as any).targetId);
                 if (!sourceCard || !targetCard) return null;
 
                 const x1 = sourceCard.position.x + PIN_OFFSET_X;
@@ -1573,50 +1945,50 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                 const x2 = targetCard.position.x + PIN_OFFSET_X;
                 const y2 = targetCard.position.y + PIN_OFFSET_Y;
 
-                // Natural organic sag / curve calculation
+                // Natural organic sag / curve calculation with hash variation for distinct overlapping
                 const dx = x2 - x1;
                 const dy = y2 - y1;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const sag = Math.min(dist * 0.12, 45); // curve droop
+                const hash = (conn.id || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                const sagOffset = (hash % 19) - 9;
+                const sag = Math.min(dist * 0.12, 45) + sagOffset;
                 const midX = (x1 + x2) / 2;
                 const midY = (y1 + y2) / 2 + sag;
 
                 const isSelected = selectedConnectionId === conn.id;
                 const isConnHovered = hoveredConnectionId === conn.id;
                 const isContradiction = conn.is_contradiction || conn.type === 'contradiction';
-                const isHighlighted =
-                  isSelected ||
-                  isConnHovered ||
-                  hoveredCardId === conn.source_id ||
-                  hoveredCardId === conn.target_id ||
-                  activeFocusCardId === conn.source_id ||
-                  activeFocusCardId === conn.target_id ||
-                  selectedIssue?.related_elements?.some(r =>
-                    sourceCard.title.toLowerCase().includes(r.toLowerCase()) &&
-                    targetCard.title.toLowerCase().includes(r.toLowerCase())
-                  );
+                const isHighlighted = isConnectionHighlighted(conn);
+
+                // Focus state: check if any card or connection is actively hovered or selected
+                const hasFocus = Boolean(activeHoverCardId || hoveredConnectionId || selectedCardId || selectedConnectionId);
+                // Permanently visible all the time: 1.0 when highlighted or in resting state, 0.45 when another thread is focused
+                const threadOpacity = hasFocus ? (isHighlighted ? 1 : 0.45) : 0.95;
 
                 const stringPath = `M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`;
+                const visuals = getThreadVisuals(conn.type, isContradiction, isHighlighted, isConnHovered, conn.confidence);
 
                 return (
                   <g
                     key={conn.id}
                     className="cursor-pointer pointer-events-auto"
+                    style={{
+                      opacity: threadOpacity,
+                      transition: 'opacity 0.25s ease-in-out'
+                    }}
                     onMouseEnter={() => {
-                      if (!hoveredCardId) {
-                        setHoveredConnectionId(conn.id);
-                      }
+                      handleThreadMouseEnter(conn);
                     }}
                     onMouseLeave={() => {
-                      setHoveredConnectionId(prev => (prev === conn.id ? null : prev));
+                      handleThreadMouseLeave(conn);
                     }}
                   >
-                    {/* Invisible wide hit area for easy clicking & hovering */}
+                    {/* Invisible hit area for easy clicking & hovering without blocking card buttons */}
                     <path
                       d={stringPath}
                       fill="none"
                       stroke="transparent"
-                      strokeWidth="26"
+                      strokeWidth="12"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedConnectionId(conn.id);
@@ -1631,25 +2003,32 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                       d={stringPath}
                       fill="none"
                       stroke="rgba(0,0,0,0.6)"
-                      strokeWidth={isHighlighted ? 4.5 : 2.5}
-                      transform="translate(1, 4)"
+                      strokeWidth={visuals.width + 2}
+                      transform="translate(1, 3)"
+                      pointerEvents="none"
                     />
+
+                    {/* Subtle pushpin attachment points rendered above the cards */}
+                    <circle cx={x1} cy={y1} r="3.5" fill="#8B1D13" stroke="#FDE68A" strokeWidth="0.8" opacity="0.9" pointerEvents="none" />
+                    <circle cx={x2} cy={y2} r="3.5" fill="#8B1D13" stroke="#FDE68A" strokeWidth="0.8" opacity="0.9" pointerEvents="none" />
 
                     {/* Main Red Investigative Thread */}
                     <path
                       d={stringPath}
                       fill="none"
-                      stroke={isConnHovered ? '#FF3B30' : isContradiction ? '#E53E3E' : '#B81D13'}
-                      strokeWidth={isHighlighted ? 3.8 : isContradiction ? 2.8 : 2.2}
-                      strokeDasharray={isContradiction ? '6,4' : undefined}
+                      stroke={visuals.stroke}
+                      strokeWidth={visuals.width}
+                      strokeDasharray={visuals.dash}
                       filter={isHighlighted ? 'url(#crimsonGlow)' : undefined}
                       className="transition-all duration-150"
+                      pointerEvents="none"
                     />
 
                     {/* String Relationship Label */}
-                    {conn.label && (
+                    {(conn.label || isConnHovered) && (
                       <g
                         transform={`translate(${midX}, ${midY})`}
+                        className="pointer-events-auto cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedConnectionId(conn.id);
@@ -1657,9 +2036,9 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                         }}
                       >
                         <rect
-                          x={-conn.label.length * 3.4 - 8}
+                          x={isConnHovered ? -Math.max((conn.label?.length || 8), 16) * 3.6 - 12 : -(conn.label || '').length * 3.4 - 8}
                           y="-11"
-                          width={conn.label.length * 6.8 + 16}
+                          width={isConnHovered ? Math.max((conn.label?.length || 8), 16) * 7.2 + 24 : (conn.label || '').length * 6.8 + 16}
                           height="20"
                           rx="4"
                           fill="#18130E"
@@ -1675,7 +2054,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                           fontFamily="'Courier Prime', monospace"
                           fontWeight="bold"
                         >
-                          {conn.label}
+                          {isConnHovered ? `${sourceCard.title} & ${targetCard.title}: ${conn.label || conn.type || 'Connected'}` : conn.label}
                         </text>
                       </g>
                     )}
@@ -1699,7 +2078,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
 
             {/* -----------------------------------------------------------------
                 LAYER 5A: RED CIRCULAR HAND-DRAWN MARKERS & CULPRIT RUBBER STAMPS
-                Resting: zIndex 42, translateZ(34px) -> Foreground above Threads (30) & Resting Cards (20)
+                Resting: zIndex 75, translateZ(30px) -> Above Cards (20) & Threads (26px)
                 Hovered: zIndex 115
                 ----------------------------------------------------------------- */}
             <svg
@@ -1707,8 +2086,8 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
               style={{
                 width: '4000px',
                 height: '3000px',
-                zIndex: hoveredMarkerId ? 115 : 42,
-                transform: 'translateZ(34px)'
+                zIndex: hoveredMarkerId ? 115 : 75,
+                transform: 'translateZ(30px)'
               }}
             >
               {boardState.elements.map(card => {
@@ -1816,12 +2195,10 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
               const pinZIndex = isDragging
                 ? 125
                 : (isHovered || hoveredMarkerId === card.id)
-                ? 105
+                ? 118
                 : isSelected
                 ? 95
-                : isCulprit
-                ? 45
-                : 40;
+                : 80;
 
               const pinTranslateZ = (isHovered || isSelected || isDragging) ? 'translateZ(70px)' : 'translateZ(36px)';
 
@@ -2067,19 +2444,72 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
             ) : selectedConnection ? (
               /* 2. CONNECTION INSPECTOR SELECTED */
               <div className="space-y-4">
-                <div className="p-3 rounded bg-[#201A14] border border-[#3E3123] space-y-2">
-                  <span className="font-typewriter text-[10px] text-[#C49A61] uppercase tracking-wider block font-bold">
-                    Connected Evidence Threads
-                  </span>
-                  <div className="flex items-center justify-between text-xs font-serif font-bold text-[#F4EDE2]">
-                    <span>
-                      {boardState.elements.find(e => e.id === selectedConnection.source_id)?.title || selectedConnection.source_id}
+                <div className="p-3 rounded bg-[#201A14] border border-[#3E3123] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-typewriter text-[10px] text-[#C49A61] uppercase tracking-wider block font-bold">
+                      Connected Evidence Thread
                     </span>
-                    <ArrowRight className="w-4 h-4 text-[#C49A61]" />
-                    <span>
-                      {boardState.elements.find(e => e.id === selectedConnection.target_id)?.title || selectedConnection.target_id}
+                    <div className="flex items-center gap-1.5">
+                      {selectedConnection.type && (
+                        <span className="px-2 py-0.5 rounded text-[9px] font-typewriter font-bold uppercase bg-[#3E1A18] text-[#F3A49E] border border-[#8C2E24]">
+                          {selectedConnection.type}
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-typewriter font-bold uppercase border ${
+                        selectedConnection.confidence === 'High'
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                          : selectedConnection.confidence === 'Possible Connection'
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-700'
+                          : 'bg-sky-950/80 text-sky-300 border-sky-700'
+                      }`}>
+                        {selectedConnection.confidence || 'VERIFIED'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs font-serif font-bold text-[#F4EDE2] bg-[#16120E] p-2 rounded border border-[#2E2419]">
+                    <span className="truncate max-w-[110px]" title={findCard(selectedConnection.source_id)?.title || selectedConnection.source_id}>
+                      {findCard(selectedConnection.source_id)?.title || selectedConnection.source_id}
+                    </span>
+                    {selectedConnection.direction === 'directional' ? (
+                      <ArrowRight className="w-4 h-4 text-[#C49A61] shrink-0" />
+                    ) : (
+                      <ArrowLeftRight className="w-4 h-4 text-[#C49A61] shrink-0" />
+                    )}
+                    <span className="truncate max-w-[110px]" title={findCard(selectedConnection.target_id)?.title || selectedConnection.target_id}>
+                      {findCard(selectedConnection.target_id)?.title || selectedConnection.target_id}
                     </span>
                   </div>
+                </div>
+
+                {/* Relationship Category Selector */}
+                <div className="space-y-1.5">
+                  <label className="font-typewriter text-[10px] text-[#A69482] uppercase tracking-wider block">
+                    Relationship Category
+                  </label>
+                  <select
+                    value={selectedConnection.type || 'friends'}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      const updated = boardState.connections.map(c =>
+                        c.id === selectedConnection.id ? { ...c, type: newType, is_manual: true, user_edited: true } : c
+                      );
+                      const newState = { ...boardState, connections: updated };
+                      setBoardState(newState);
+                      scheduleSave(newState);
+                    }}
+                    className="w-full bg-[#1C1612] border border-[#3E3123] rounded p-2 text-xs text-[#F4EDE2] font-typewriter focus:outline-none focus:border-[#C49A61]"
+                  >
+                    <option value="family">Family (Father, Mother, Sibling, Spouses)</option>
+                    <option value="romance">Romantic (Lovers, Admirers, Partners)</option>
+                    <option value="professional">Professional (Colleagues, Employer, Partners)</option>
+                    <option value="friends">Social / Friends (Companions, Trusted Allies)</option>
+                    <option value="mystery">Mystery (Investigator, Suspect, Accomplice)</option>
+                    <option value="enemies">Conflict / Enemies (Rivals, Opponent, Adversary)</option>
+                    <option value="hidden">Hidden / Secret (Secret Alliance, Undercover)</option>
+                    <option value="timeline">Timeline / Event (Incident Participation)</option>
+                    <option value="possible_connection">Possible Connection (Uncertain / Ambiguous)</option>
+                  </select>
                 </div>
 
                 {/* Edit Relationship Label */}
@@ -2092,7 +2522,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                     value={selectedConnection.label || ''}
                     onChange={(e) => {
                       const updated = boardState.connections.map(c =>
-                        c.id === selectedConnection.id ? { ...c, label: e.target.value } : c
+                        c.id === selectedConnection.id ? { ...c, label: e.target.value, is_manual: true, user_edited: true } : c
                       );
                       const newState = { ...boardState, connections: updated };
                       setBoardState(newState);
@@ -2114,7 +2544,7 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                         type="button"
                         onClick={() => {
                           const updated = boardState.connections.map(c =>
-                            c.id === selectedConnection.id ? { ...c, label: lbl } : c
+                            c.id === selectedConnection.id ? { ...c, label: lbl, is_manual: true, user_edited: true } : c
                           );
                           const newState = { ...boardState, connections: updated };
                           setBoardState(newState);
@@ -2128,8 +2558,108 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                   </div>
                 </div>
 
+                {/* Supporting Story Evidence Quote */}
+                {selectedConnection.evidence_quote && (
+                  <div className="p-3 rounded bg-[#18130E] border border-[#3E3123] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-typewriter text-[10px] text-[#C49A61] uppercase tracking-wider flex items-center gap-1 font-bold">
+                        <Quote className="w-3 h-3 text-[#C49A61]" /> Supporting Story Evidence
+                      </span>
+                      {selectedConnection.source_chapter && (
+                        <span className="text-[9px] font-typewriter text-[#8C7A65]">
+                          {selectedConnection.source_chapter}
+                        </span>
+                      )}
+                    </div>
+                    <p className="font-serif text-xs text-[#F4EDE2] italic leading-relaxed border-l-2 border-[#C49A61]/60 pl-2">
+                      "{selectedConnection.evidence_quote}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Related Story Event */}
+                {selectedConnection.related_event && (
+                  <div className="p-2.5 rounded bg-[#18130E] border border-[#3E3123] flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-[#C49A61] shrink-0" />
+                    <div>
+                      <span className="font-typewriter text-[9px] text-[#8C7A65] uppercase tracking-wider block">Related Story Event</span>
+                      <span className="font-typewriter text-xs text-[#F4EDE2] font-bold">{selectedConnection.related_event}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Narrative Continuity Notes */}
+                <div className="space-y-1.5">
+                  <label className="font-typewriter text-[10px] text-[#A69482] uppercase tracking-wider block">
+                    Continuity Notes & Dynamics
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={selectedConnection.notes || ''}
+                    onChange={(e) => {
+                      const updated = boardState.connections.map(c =>
+                        c.id === selectedConnection.id ? { ...c, notes: e.target.value, is_manual: true, user_edited: true } : c
+                      );
+                      const newState = { ...boardState, connections: updated };
+                      setBoardState(newState);
+                      scheduleSave(newState);
+                    }}
+                    placeholder="Explain relationship dynamic or backstory..."
+                    className="w-full bg-[#1C1612] border border-[#3E3123] rounded p-2 text-xs text-[#F4EDE2] font-typewriter focus:outline-none focus:border-[#C49A61] resize-none"
+                  />
+                </div>
+
+                {/* Quick Status Toggles: Mark Confirmed / Mark Uncertain */}
+                <div className="pt-2 border-t border-[#2A2118] space-y-2">
+                  <span className="font-typewriter text-[10px] text-[#8C7A65] uppercase tracking-wider block">
+                    Verification Status
+                  </span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = boardState.connections.map(c =>
+                          c.id === selectedConnection.id ? { ...c, confidence: 'High', verified: true, is_manual: true, user_edited: true } : c
+                        );
+                        const newState = { ...boardState, connections: updated };
+                        setBoardState(newState);
+                        scheduleSave(newState);
+                        addToast('Relationship Confirmed', 'Flagged as high-confidence verified relationship.', 'success');
+                      }}
+                      className={`px-2.5 py-1.5 rounded text-[11px] font-typewriter font-bold uppercase transition-colors flex items-center justify-center gap-1 ${
+                        selectedConnection.confidence === 'High'
+                          ? 'bg-emerald-900 text-emerald-100 border border-emerald-600'
+                          : 'bg-[#201A14] text-[#A69482] hover:bg-emerald-950 hover:text-emerald-300 border border-[#3E3123]'
+                      }`}
+                    >
+                      <Check className="w-3 h-3" />
+                      Mark Confirmed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = boardState.connections.map(c =>
+                          c.id === selectedConnection.id ? { ...c, confidence: 'Possible Connection', verified: false, is_manual: true, user_edited: true } : c
+                        );
+                        const newState = { ...boardState, connections: updated };
+                        setBoardState(newState);
+                        scheduleSave(newState);
+                        addToast('Marked as Uncertain', 'Flagged as possible connection awaiting further evidence.', 'info');
+                      }}
+                      className={`px-2.5 py-1.5 rounded text-[11px] font-typewriter font-bold uppercase transition-colors flex items-center justify-center gap-1 ${
+                        selectedConnection.confidence === 'Possible Connection'
+                          ? 'bg-amber-900 text-amber-100 border border-amber-600'
+                          : 'bg-[#201A14] text-[#A69482] hover:bg-amber-950 hover:text-amber-300 border border-[#3E3123]'
+                      }`}
+                    >
+                      <AlertTriangle className="w-3 h-3" />
+                      Mark Uncertain
+                    </button>
+                  </div>
+                </div>
+
                 {/* Delete Connection */}
-                <div className="pt-4 border-t border-[#2A2118]">
+                <div className="pt-2 border-t border-[#2A2118]">
                   <button
                     type="button"
                     onClick={() => handleDeleteConnection(selectedConnection.id)}
@@ -2193,6 +2723,43 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                     className="w-full bg-[#1C1612] border border-[#3E3123] rounded p-2 text-xs font-typewriter text-[#C9B99B] focus:outline-none focus:border-[#C49A61]"
                   />
                 </div>
+
+                {/* Character Narrative Importance & Classifications */}
+                {selectedElement.type === 'character' && (
+                  <div className="p-3 rounded bg-[#1C1612] border border-[#3E3123] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-typewriter text-[10px] text-[#A69482] uppercase tracking-wider">
+                        Narrative Centrality
+                      </span>
+                      <span className="px-2 py-0.5 rounded font-typewriter text-xs font-bold text-[#E5A8A3] bg-red-950/80 border border-red-800/60">
+                        {selectedElement.metadata?.importance_score ?? 85} / 100
+                      </span>
+                    </div>
+                    {selectedElement.metadata?.classifications && selectedElement.metadata.classifications.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {selectedElement.metadata.classifications.map((cls: string, cIdx: number) => (
+                          <span
+                            key={cIdx}
+                            className="px-2 py-0.5 rounded text-[10px] font-typewriter font-semibold text-[#D6AB72] bg-[#2E2319] border border-[#4E3925]"
+                          >
+                            {cls}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDetectiveChat(true);
+                        handleSendChat(`Provide forensic analysis on ${selectedElement.title} and their role in the story.`);
+                      }}
+                      className="w-full mt-2 py-1.5 rounded bg-[#2A2016] hover:bg-[#3E2E20] border border-[#C49A61]/40 text-[#E0B77D] font-typewriter text-[10px] uppercase font-bold transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Bot className="w-3 h-3 text-[#C49A61]" />
+                      <span>Investigate {selectedElement.title} with AI</span>
+                    </button>
+                  </div>
+                )}
 
                 {/* Description */}
                 <div className="space-y-1">
@@ -2259,10 +2826,17 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                   </span>
                   <div className="space-y-1">
                     {boardState.connections
-                      .filter(c => c.source_id === selectedElement.id || c.target_id === selectedElement.id)
+                      .filter(c => {
+                        const charId = selectedElement.metadata?.character_id;
+                        return c.source_id === selectedElement.id ||
+                          c.target_id === selectedElement.id ||
+                          (charId && (c.source_id === charId || c.target_id === charId));
+                      })
                       .map(conn => {
-                        const otherId = conn.source_id === selectedElement.id ? conn.target_id : conn.source_id;
-                        const otherCard = boardState.elements.find(e => e.id === otherId);
+                        const charId = selectedElement.metadata?.character_id;
+                        const isSource = conn.source_id === selectedElement.id || (charId && conn.source_id === charId);
+                        const otherId = isSource ? conn.target_id : conn.source_id;
+                        const otherCard = findCard(otherId);
                         return (
                           <div
                             key={conn.id}
@@ -2795,6 +3369,182 @@ export const InvestigationBoard: React.FC<InvestigationBoardProps> = ({
                   className="px-4 py-2 rounded-lg bg-[#2B2016] hover:bg-[#3E2E20] text-[#E0B77D] font-typewriter text-xs font-bold uppercase transition-colors"
                 >
                   Return to Corkboard
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* -----------------------------------------------------------------------
+            FORENSIC DETECTIVE AI CHAT ASSISTANT MODAL
+            ----------------------------------------------------------------------- */}
+        {showDetectiveChat && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.94, opacity: 0, y: 15 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.94, opacity: 0, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="relative w-full max-w-2xl bg-[#16120E] border-2 border-[#543F2A] rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+              style={{
+                boxShadow: '0 30px 60px -12px rgba(0,0,0,0.9), inset 0 0 100px rgba(0,0,0,0.5)'
+              }}
+            >
+              {/* Header */}
+              <div className="p-4 bg-gradient-to-r from-[#201812] to-[#2B1F17] border-b border-[#3E3022] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#3A291A] border border-[#C49A61]/60 flex items-center justify-center text-[#C49A61] shadow">
+                    <Bot className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif text-base font-bold text-[#F4EDE2] flex items-center gap-2">
+                      <span>Forensic Detective Assistant</span>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-typewriter font-bold bg-[#A82E25] text-white">
+                        AI INVESTIGATOR
+                      </span>
+                    </h3>
+                    <p className="font-typewriter text-[10px] text-[#A69482]">
+                      Target Dossier: {activeStory?.title || 'Active Manuscript'} • Citing Verified Canon
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDetectiveChat(false)}
+                  className="p-1.5 text-[#8C7A65] hover:text-[#F4EDE2] rounded-lg hover:bg-[#2A2016] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Quick Preset Investigation Questions */}
+              <div className="px-4 py-2 bg-[#1B1510] border-b border-[#2C2117] flex items-center gap-1.5 overflow-x-auto shrink-0 scrollbar-none">
+                <span className="font-typewriter text-[9px] text-[#8C7A65] uppercase shrink-0 font-bold">
+                  Quick Inquiries:
+                </span>
+                {[
+                  'Why is the prime suspect suspicious?',
+                  'Show all contradictions on the board',
+                  'What connects these characters?',
+                  'Which clues remain unexplained?',
+                  'Trace chronological timeline gaps'
+                ].map((preset, pIdx) => (
+                  <button
+                    key={pIdx}
+                    type="button"
+                    disabled={chatLoading}
+                    onClick={() => handleSendChat(preset)}
+                    className="px-2.5 py-1 rounded bg-[#251D16] hover:bg-[#34271D] border border-[#3E3022] text-[10px] font-serif text-[#D6AB72] whitespace-nowrap hover:border-[#C49A61]/60 transition-colors disabled:opacity-50"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chat Message History */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 font-typewriter text-xs">
+                {chatMessages.map((msg, mIdx) => (
+                  <div
+                    key={mIdx}
+                    className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    <div
+                      className={`max-w-[88%] p-3.5 rounded-lg shadow-md ${
+                        msg.sender === 'user'
+                          ? 'bg-[#3A2A1D] border border-[#5A422D] text-[#F4EDE2]'
+                          : 'bg-[#1E1712] border border-[#3E3022] text-[#E0D7C7] space-y-2'
+                      }`}
+                    >
+                      {msg.confidence && (
+                        <div className="flex items-center gap-2 pb-1 border-b border-[#362719]">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              msg.confidence.includes('FACT')
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                                : msg.confidence.includes('CONTRADICTED')
+                                ? 'bg-red-950 text-red-300 border border-red-800'
+                                : 'bg-amber-950 text-amber-300 border border-amber-800'
+                            }`}
+                          >
+                            {msg.confidence}
+                          </span>
+                          <span className="text-[10px] text-[#8C7A65]">Forensic Evaluation</span>
+                        </div>
+                      )}
+
+                      <div className="whitespace-pre-wrap leading-relaxed font-serif text-sm">
+                        {msg.text}
+                      </div>
+
+                      {msg.citations && msg.citations.length > 0 && (
+                        <div className="pt-2 border-t border-[#342517] flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] font-typewriter uppercase text-[#8C7A65]">
+                            Evidence Citations:
+                          </span>
+                          {msg.citations.map((cit, cIdx) => (
+                            <span
+                              key={cIdx}
+                              className="px-2 py-0.5 rounded bg-[#281D14] border border-[#483321] text-[10px] text-[#C49A61] font-mono"
+                            >
+                              📖 {cit}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {msg.highlightCardIds && msg.highlightCardIds.length > 0 && (
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (msg.highlightCardIds?.[0]) {
+                                focusOnElements(msg.highlightCardIds);
+                                setSelectedCardId(msg.highlightCardIds[0]);
+                                setShowDetectiveChat(false);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded bg-[#C49A61]/20 hover:bg-[#C49A61]/30 border border-[#C49A61]/50 text-[#F4EDE2] text-[10px] font-typewriter font-bold uppercase transition-colors flex items-center gap-1"
+                          >
+                            <Crosshair className="w-3 h-3 text-[#C49A61]" />
+                            Locate Linked Target on Board
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {chatLoading && (
+                  <div className="flex items-center gap-2 p-3 bg-[#1C1612] border border-[#3E3022] rounded-lg text-[#C49A61] text-xs">
+                    <Sparkles className="w-4 h-4 animate-spin text-[#C49A61]" />
+                    <span className="font-typewriter">Detective Vance is cross-referencing chapters and evidence...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Bar */}
+              <div className="p-3 bg-[#1C1612] border-t border-[#3E3022] flex items-center gap-2 shrink-0">
+                <input
+                  type="text"
+                  value={chatQuery}
+                  onChange={(e) => setChatQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !chatLoading) {
+                      e.preventDefault();
+                      handleSendChat();
+                    }
+                  }}
+                  placeholder="Ask Detective Vance about clues, motives, alibis, or plot contradictions..."
+                  className="flex-1 bg-[#140F0B] border border-[#3E3022] rounded-lg px-3.5 py-2 text-xs font-serif text-[#F4EDE2] placeholder:text-[#6B5A49] focus:outline-none focus:border-[#C49A61]"
+                />
+                <button
+                  type="button"
+                  disabled={!chatQuery.trim() || chatLoading}
+                  onClick={() => handleSendChat()}
+                  className="px-4 py-2 rounded-lg bg-[#C49A61] hover:bg-[#D6AB72] text-[#14100D] font-typewriter text-xs font-bold uppercase transition-transform hover:scale-105 disabled:opacity-40 disabled:hover:scale-100 shadow flex items-center gap-1.5"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Inquire</span>
                 </button>
               </div>
             </motion.div>

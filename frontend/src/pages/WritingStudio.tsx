@@ -89,7 +89,75 @@ export const WritingStudio: React.FC = () => {
   const pagesRef = useRef<Page[]>(pages);
   pagesRef.current = pages;
 
+  const selectedChapterRef = useRef<Chapter | null>(selectedChapter);
+  selectedChapterRef.current = selectedChapter;
+  const titleRef = useRef<string>(title);
+  titleRef.current = title;
+  const summaryRef = useRef<string>(summary);
+  summaryRef.current = summary;
+  const statusRef = useRef<Chapter['status']>(status);
+  statusRef.current = status;
+
+  // Unmount cleanup hook: seamlessly persist active folio & chapter before leaving the page
+  useEffect(() => {
+    return () => {
+      const chap = selectedChapterRef.current;
+      if (!chap) return;
+
+      const activePage = pagesRef.current[currentPageRef.current - 1];
+      if (activePage && editorRef.current && editorRef.current.isConnected) {
+        const domHtml = editorRef.current.innerHTML;
+        if (domHtml && domHtml.trim() !== '' && domHtml !== '<p><br></p>') {
+          pageContentCacheRef.current[activePage.id] = domHtml;
+        }
+      }
+
+      const pagesToSave = pagesRef.current.map(p => ({
+        ...p,
+        content: pageContentCacheRef.current[p.id] ?? p.content ?? '<p><br></p>',
+      }));
+
+      const combined = pagesToSave
+        .map(p => p.content)
+        .filter(c => c && c.trim() !== '' && c.trim() !== '<p><br></p>')
+        .join('<!-- story-page-break -->');
+
+      const contentToPersist = combined || pageContentCacheRef.current[pagesRef.current[0]?.id] || pagesRef.current[0]?.content || '';
+      if (contentToPersist && contentToPersist.trim() !== '' && contentToPersist !== '<p><br></p>') {
+        const draftPayload = {
+          content: contentToPersist,
+          pages: pagesToSave,
+          title: titleRef.current || chap.title,
+          summary: summaryRef.current,
+          status: statusRef.current,
+          timestamp: Date.now()
+        };
+        try {
+          localStorage.setItem(`storyweave_chapter_${chap.id}`, JSON.stringify(draftPayload));
+          localStorage.setItem(`storyweave_draft_${chap.id}`, JSON.stringify(draftPayload));
+        } catch {}
+
+        api.updateChapter(chap.id, {
+          title: titleRef.current || chap.title,
+          content: contentToPersist,
+          summary: summaryRef.current,
+          status: statusRef.current,
+          pages: pagesToSave
+        }).catch(err => console.error("[Unmount chapter save error]", err));
+
+        if (activePage) {
+          api.updateChapterPage(chap.id, activePage.id, {
+            content: pageContentCacheRef.current[activePage.id] ?? activePage.content,
+            page_number: activePage.page_number,
+            save_status: 'saved'
+          }).catch(err => console.error("[Unmount page save error]", err));
+        }
+      }
+    };
+  }, []);
+
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const currentLoadedPageIdRef = useRef<string | null>(null);
 
   const createDefaultPage = (chapterId: string, pageNumber: number, initialContent = '<p><br></p>'): Page => ({
     id: `page_${chapterId}_${pageNumber}`,
@@ -113,8 +181,12 @@ export const WritingStudio: React.FC = () => {
       // Fallback
     }
 
-    if (chapterPages.length === 0) {
-      if (chap.pages && chap.pages.length > 0) {
+    const totalFetchedChars = chapterPages.reduce((acc, p) => acc + (stripHtml(p.content || '').length), 0);
+    const chapContentChars = stripHtml(chap.content || '').length;
+
+    // If chapter content has more prose than fetched pages (or fetched is empty/blank), parse from chapter content
+    if (chapterPages.length === 0 || chapContentChars > totalFetchedChars) {
+      if (chap.pages && chap.pages.length > 0 && chap.pages.reduce((acc, p) => acc + (stripHtml(p.content || '').length), 0) >= chapContentChars) {
         chapterPages = chap.pages;
       } else {
         const raw = chap.content || '';
@@ -132,6 +204,41 @@ export const WritingStudio: React.FC = () => {
       }
     }
 
+    // Check permanent localStorage draft recovery if backup has richer prose
+    try {
+      const draftStr = localStorage.getItem(`storyweave_draft_${chap.id}`) || localStorage.getItem(`storyweave_chapter_${chap.id}`);
+      if (draftStr) {
+        const draft = JSON.parse(draftStr);
+        const currentTotalLen = chapterPages.reduce((acc, p) => acc + (stripHtml(p.content || '').length), 0);
+        const draftTotalLen = stripHtml(draft.content || '').length;
+        if (draftTotalLen > currentTotalLen) {
+          if (draft.pages && draft.pages.length > 0) {
+            chapterPages = draft.pages;
+          } else if (draft.content) {
+            const stringPages = parseContentToPages(draft.content);
+            chapterPages = stringPages.map((str, idx) => ({
+              id: `page_${chap.id}_${idx + 1}`,
+              chapter_id: chap.id,
+              page_number: idx + 1,
+              content: str || '<p><br></p>',
+              word_count: stripHtml(str).split(/\s+/).filter(Boolean).length,
+              save_status: 'saved',
+              created_at: chap.created_at || new Date().toISOString(),
+              updated_at: chap.updated_at || new Date().toISOString(),
+            }));
+          }
+          // Immediately sync recovered richer draft to backend so server stays updated forever
+          api.updateChapter(chap.id, {
+            title: draft.title || chap.title,
+            content: draft.content,
+            summary: draft.summary || chap.summary,
+            status: draft.status || chap.status || 'draft',
+            pages: chapterPages
+          }).catch(console.error);
+        }
+      }
+    } catch {}
+
     if (chapterPages.length === 0) {
       chapterPages = [createDefaultPage(chap.id, 1, chap.content || '<p><br></p>')];
     }
@@ -140,10 +247,15 @@ export const WritingStudio: React.FC = () => {
       pageContentCacheRef.current[p.id] = p.content;
     });
 
+    currentLoadedPageIdRef.current = null;
     setPages(chapterPages);
     setCurrentPage(1);
     setPageDirection(1);
     setIsPageOverCapacity(false);
+
+    if (editorRef.current && chapterPages[0]) {
+      editorRef.current.innerHTML = chapterPages[0].content || '<p><br></p>';
+    }
   };
 
   // Fetch chapters and characters
@@ -172,6 +284,20 @@ export const WritingStudio: React.FC = () => {
           p.source_chapters?.some(sc => sc.toLowerCase().includes(`chapter ${target.chapter_number}`))
         );
         setChapterAlerts(alerts);
+      } else if (chaps.length === 0) {
+        // Auto-seed Chapter 1 so the story inside it is always present
+        const initialTitle = activeStory.plot_outline?.[0]?.title || `Chapter 1 - The Opening Scene`;
+        const initialSummary = activeStory.plot_outline?.[0]?.focus || activeStory.description || "The beginning of the case inquiry.";
+        const initialContent = `<p>The chronicle of <strong>${activeStory.title}</strong> commences in ${activeStory.setting || 'the estate'} during ${activeStory.time_period || 'the incident'}.</p><p>${activeStory.description || ''}</p>`;
+        const newChap = await api.createChapter(activeStory.id, {
+          chapter_number: 1,
+          title: initialTitle,
+          summary: initialSummary,
+          content: initialContent,
+          status: 'draft'
+        });
+        setChapters([newChap]);
+        selectChapter(newChap);
       }
     } catch (e: any) {
       addToast("Failed to load studio", e.message, "error");
@@ -189,14 +315,17 @@ export const WritingStudio: React.FC = () => {
     try {
       setIsSyncingChars(true);
       sound.playTypewriterKeystroke();
+      // Ensure active folio text and chapter are saved to server before sync
+      await handleSave(undefined, title, summary, status, false);
       const res = await api.syncStoryCharacters(activeStory.id);
-      const updated = await api.getStoryCharacters(activeStory.id);
+      const updated = res.characters || (await api.getStoryCharacters(activeStory.id));
       setCharacters(updated);
+      const added = res.added_count ?? res.synced_count ?? 0;
+      const updatedCount = res.updated_count ?? 0;
+      const unchanged = res.unchanged_count ?? Math.max(0, updated.length - added - updatedCount);
       addToast(
         "Characters Synchronized", 
-        res.synced_count > 0 
-          ? `${res.synced_count} character(s) detected and registered.` 
-          : "Manuscript scanned. All characters are up to date.", 
+        `${added} added, ${updatedCount} updated, ${unchanged} unchanged.`, 
         "success"
       );
     } catch (e: any) {
@@ -205,6 +334,17 @@ export const WritingStudio: React.FC = () => {
       setIsSyncingChars(false);
     }
   };
+
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if ((e.altKey && (e.key === 'c' || e.key === 'C')) || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C'))) {
+        e.preventDefault();
+        handleSyncCharacters();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [activeStory]);
 
   const selectChapter = async (chap: Chapter) => {
     flushCurrentPage();
@@ -297,6 +437,16 @@ export const WritingStudio: React.FC = () => {
     pageVersionRef.current[activePage.id] = (pageVersionRef.current[activePage.id] || 0) + 1;
     const version = pageVersionRef.current[activePage.id];
     const words = stripHtml(currentHtml).split(/\s+/).filter(Boolean).length;
+
+    const pageIdx = currentPageRef.current - 1;
+    if (pagesRef.current[pageIdx]) {
+      pagesRef.current[pageIdx] = {
+        ...pagesRef.current[pageIdx],
+        content: currentHtml,
+        word_count: words,
+        updated_at: new Date().toISOString()
+      };
+    }
 
     setPages(prev => {
       const next = [...prev];
@@ -438,6 +588,16 @@ export const WritingStudio: React.FC = () => {
   };
 
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.altKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      handleSyncCharacters();
+      return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+      e.preventDefault();
+      handleSyncCharacters();
+      return;
+    }
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'Enter') {
         // Ctrl+Enter: Insert Page Break
@@ -496,27 +656,59 @@ export const WritingStudio: React.FC = () => {
 
     try {
       setIsSaving(true);
-      const combined = pagesRef.current
-        .map(p => pageContentCacheRef.current[p.id] ?? p.content)
-        .filter(c => c && c.trim() !== '<p><br></p>')
+      const pagesToSave = pagesRef.current.map(p => ({
+        ...p,
+        content: pageContentCacheRef.current[p.id] ?? p.content ?? '<p><br></p>',
+      }));
+
+      const combined = pagesToSave
+        .map(p => p.content)
+        .filter(c => c && c.trim() !== '' && c.trim() !== '<p><br></p>')
         .join('<!-- story-page-break -->');
 
-      const fullContent = textToSave !== undefined ? textToSave : (combined || pagesRef.current[0]?.content || '');
+      const fullContent = (textToSave !== undefined && textToSave.trim() !== '')
+        ? textToSave
+        : (combined || pageContentCacheRef.current[pagesRef.current[0]?.id] || pagesRef.current[0]?.content || '');
+
+      setContent(fullContent);
+
+      const draftPayload = {
+        content: fullContent,
+        pages: pagesToSave,
+        title: titleToSave,
+        summary: summaryToSave,
+        status: statusToSave,
+        timestamp: Date.now()
+      };
+
+      try {
+        localStorage.setItem(`storyweave_chapter_${selectedChapter.id}`, JSON.stringify(draftPayload));
+        localStorage.setItem(`storyweave_draft_${selectedChapter.id}`, JSON.stringify(draftPayload));
+      } catch {}
 
       const updated = await api.updateChapter(selectedChapter.id, {
         title: titleToSave,
         content: fullContent,
         summary: summaryToSave,
         status: statusToSave,
-        pages: pagesRef.current
+        pages: pagesToSave
       });
+
+      const activePage = pagesRef.current[currentPageRef.current - 1];
+      if (activePage) {
+        await api.updateChapterPage(selectedChapter.id, activePage.id, {
+          content: pageContentCacheRef.current[activePage.id] ?? activePage.content,
+          page_number: activePage.page_number,
+          save_status: 'saved'
+        }).catch(console.error);
+      }
 
       setSelectedChapter(updated);
       setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
       setLastSaved(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
       if (showToast) {
         sound.playTypewriterKeystroke();
-        addToast("Chapter Saved", `"${titleToSave}" committed to universe archive.`, "success");
+        addToast("Draft Saved Permanently", `"${titleToSave}" is securely saved and will stay forever in your archive.`, "success");
       }
     } catch (e: any) {
       setLastSaved('Save Error');
@@ -548,6 +740,10 @@ export const WritingStudio: React.FC = () => {
     if (!window.confirm(`Delete Chapter ${chapNum}? This text cannot be restored.`)) return;
     try {
       await api.deleteChapter(chapId);
+      try {
+        localStorage.removeItem(`storyweave_chapter_${chapId}`);
+        localStorage.removeItem(`storyweave_draft_${chapId}`);
+      } catch {}
       addToast("Chapter Removed", `Chapter ${chapNum} deleted.`, "info");
       await fetchStudioData();
     } catch (e: any) {
@@ -647,7 +843,7 @@ export const WritingStudio: React.FC = () => {
             onChange={(e) => {
               const newStatus = e.target.value as any;
               setStatus(newStatus);
-              handleSave(content, title, summary, newStatus, true);
+              handleSave(undefined, title, summary, newStatus, true);
             }}
             className="bg-[#241D17] border border-[#3E3226] text-[#E0B77D] font-sans text-xs sm:text-sm font-semibold rounded-lg px-3 py-2 h-10 focus:outline-none focus:border-[#C49A61]/60 shadow-sm"
           >
@@ -657,7 +853,7 @@ export const WritingStudio: React.FC = () => {
           </select>
 
           <button
-            onClick={() => handleSave(content, title, summary, status, true)}
+            onClick={() => handleSave(undefined, title, summary, status, true)}
             disabled={isSaving}
             className="flex items-center space-x-2 px-4 py-2 h-10 rounded-lg bg-[#C49A61] hover:bg-[#D6AB72] text-[#14100D] font-sans text-xs sm:text-sm font-bold uppercase tracking-wider shadow-md transition-all shrink-0"
           >
@@ -872,17 +1068,23 @@ export const WritingStudio: React.FC = () => {
                   <div
                     ref={(el) => {
                       editorRef.current = el;
-                      if (el && currentPageData) {
-                        const targetHtml = pageContentCacheRef.current[currentPageData.id] ?? currentPageData.content ?? '<p><br></p>';
-                        if (el.innerHTML !== targetHtml) {
+                      if (!el) return;
+                      const pageId = currentPageData?.id || `folio-${currentPage}`;
+                      const isCurrentlyFocused = document.activeElement === el;
+                      const isPageChanged = currentLoadedPageIdRef.current !== pageId;
+                      const isEditorEmpty = !el.childNodes || el.childNodes.length === 0 || el.innerHTML.trim() === '';
+
+                      if (isPageChanged || (isEditorEmpty && !isCurrentlyFocused)) {
+                        const targetHtml = (currentPageData ? pageContentCacheRef.current[currentPageData.id] : undefined) ?? currentPageData?.content ?? '<p><br></p>';
+                        if (el.innerHTML !== targetHtml && (!isCurrentlyFocused || isPageChanged)) {
                           el.innerHTML = targetHtml;
                         }
+                        currentLoadedPageIdRef.current = pageId;
                         setIsPageOverCapacity(el.scrollHeight > 450);
                       }
                     }}
                     contentEditable
                     suppressContentEditableWarning
-                    dangerouslySetInnerHTML={{ __html: activeFolioContent }}
                     data-placeholder="Begin penning the narrative on this folio... Describe the environment, characters, tensions, and unfolding secrets..."
                     onInput={handlePageInput}
                     onBlur={handlePageBlur}
@@ -1192,7 +1394,7 @@ export const WritingStudio: React.FC = () => {
             {/* TAB 3: CHARACTER QUICK NOTES */}
             {assistantTab === 'characters' && (
               <div className="bg-[#191512] p-4 sm:p-5 rounded-xl border border-[#30261E] shadow-xl space-y-3.5 font-sans text-xs sm:text-sm">
-                <div className="flex items-center justify-between border-b border-[#2C241D] pb-3">
+                <div className="flex items-center justify-between border-b border-[#2C241D] pb-3 gap-2 flex-wrap">
                   <div className="flex items-center space-x-2">
                     <Users className="w-4 h-4 text-[#C49A61]" />
                     <span className="font-mono text-xs sm:text-sm font-bold text-[#E5DCce] uppercase tracking-wider">
@@ -1202,26 +1404,52 @@ export const WritingStudio: React.FC = () => {
                   <button
                     onClick={handleSyncCharacters}
                     disabled={isSyncingChars}
-                    title="Scan manuscript chapters and extract characters"
-                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#2A2016] border border-[#C49A61]/50 text-[#E0B77D] hover:bg-[#3D2E20] text-xs font-mono disabled:opacity-50 transition-all"
+                    title="Scan all manuscript chapters and extract characters (Alt+C)"
+                    className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-[#2A2016] border border-[#C49A61]/60 text-[#E0B77D] hover:bg-[#3D2E20] hover:border-[#C49A61] text-xs font-mono disabled:opacity-50 transition-all shadow-sm group"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isSyncingChars ? 'animate-spin text-[#C49A61]' : ''}`} />
-                    <span>{isSyncingChars ? 'Scanning...' : 'Sync'}</span>
+                    <RefreshCw className={`w-3 h-3 ${isSyncingChars ? 'animate-spin text-[#C49A61]' : 'text-[#C49A61] group-hover:rotate-180 transition-transform duration-500'}`} />
+                    <span className="font-bold">{isSyncingChars ? 'Scanning...' : 'Sync'}</span>
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-[#C49A61]/20 text-[#E0B77D] border border-[#C49A61]/40 font-mono font-bold">KEY</span>
                   </button>
                 </div>
 
                 <div className="space-y-2.5 max-h-[520px] overflow-y-auto pr-1">
                   {characters.map((char) => (
-                    <div key={char.id} className="p-3 rounded-lg bg-[#241D17] border border-[#3A2E23] space-y-1.5">
+                    <div key={char.id} className="p-3 rounded-lg bg-[#241D17] border border-[#3A2E23] space-y-1.5 hover:border-[#C49A61]/40 transition-colors">
                       <div className="flex items-center justify-between">
                         <span className="font-serif font-bold text-[#EDE3D4] text-sm sm:text-base">{char.name}</span>
-                        <span className="text-xs font-mono text-[#DDAE72]">{char.role}</span>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-[11px] font-mono text-[#DDAE72]">{char.role || "Supporting"}</span>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-semibold ${
+                            char.current_status === 'Deceased' ? 'bg-red-950/60 text-red-400 border border-red-800/40' :
+                            char.current_status === 'Missing' ? 'bg-amber-950/60 text-amber-300 border border-amber-800/40' :
+                            'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
+                          }`}>
+                            {char.current_status || "Alive"}
+                          </span>
+                        </div>
                       </div>
-                      <p className="font-serif text-xs sm:text-sm text-[#B8A794] leading-relaxed">
-                        {char.motivations || "No motivations logged."}
+                      <p className="font-serif text-xs sm:text-sm text-[#B8A794] leading-relaxed line-clamp-3">
+                        {char.motivations || char.backstory || "Involved in unfolding manuscript events."}
                       </p>
                     </div>
                   ))}
+
+                  {characters.length === 0 && (
+                    <div className="p-4 rounded-lg bg-[#241D17]/60 border border-dashed border-[#3A2E23] text-center space-y-2">
+                      <p className="text-[#8C7A68] text-xs leading-relaxed">
+                        No characters detected yet. Pen your narrative or press the <strong className="text-[#E0B77D]">Sync</strong> key to scan all chapters and extract character dossiers.
+                      </p>
+                      <button
+                        onClick={handleSyncCharacters}
+                        disabled={isSyncingChars}
+                        className="px-3 py-1.5 rounded bg-[#C49A61]/20 hover:bg-[#C49A61]/30 text-[#E0B77D] border border-[#C49A61]/40 font-mono text-xs font-semibold inline-flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="w-3 h-3 text-[#C49A61]" />
+                        <span>Sync Characters (Alt+C)</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

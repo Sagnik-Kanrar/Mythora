@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { useAuth } from '../../context/AuthContext';
+import { sound } from '../../services/audioService';
 
 const sheetACells = [
   { x: 6, y: 0, w: 386, h: 575, spine: '#2c4f63', title: 'THE LAST HARBOR', author: 'Elise Moreau' },
@@ -54,6 +56,7 @@ export interface BookHeroProps {
 }
 
 export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
+  const { user, profile, openAuthModal, signOutUser } = useAuth();
   const containerRef = useRef<HTMLDivElement>(null);
   const wordmarkRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLElement>(null);
@@ -203,7 +206,7 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
 
         ctx.font = '10px sans-serif';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-        ctx.fillText('STORYWEAVE PRESS', 190, 500);
+        ctx.fillText('MYTHORA PRESS', 190, 500);
       }
 
       const tex = new THREE.CanvasTexture(canvas);
@@ -545,6 +548,53 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         />
       </div>
 
+      {/* 2. Landing Page Authentication Entry Points (Sign In & Create an Account) */}
+      <div className="absolute top-6 right-6 sm:right-10 z-[35] flex items-center gap-3">
+        {user ? (
+          <div className="flex items-center gap-2.5 bg-[#18120C]/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-[#C49A61]/50 shadow-lg">
+            <div className="w-7 h-7 rounded-full bg-[#C49A61]/25 border border-[#C49A61] flex items-center justify-center text-xs font-bold text-[#F3D4A0]">
+              {(profile?.username || user.displayName || 'I').substring(0, 2).toUpperCase()}
+            </div>
+            <span className="font-sans text-xs font-bold text-[#F4ECE2] hidden sm:inline max-w-[120px] truncate">
+              {profile?.username || user.displayName || 'Investigator'}
+            </span>
+            <button
+              onClick={() => {
+                sound.playPaperRustle();
+                signOutUser();
+              }}
+              className="text-[11px] font-typewriter text-[#C49A61] hover:text-[#E74C3C] transition-colors ml-1 uppercase tracking-wider"
+              title="Sign out of Mythora"
+            >
+              Sign Out
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <button
+              onClick={() => {
+                sound.playPaperRustle();
+                openAuthModal('signin');
+              }}
+              className="px-4 py-2 rounded-full bg-[#18120C]/85 hover:bg-[#251B13] border border-[#C49A61]/50 hover:border-[#F3D4A0] text-[#E0B77D] hover:text-white font-sans text-xs uppercase tracking-wider font-bold backdrop-blur-md shadow-lg transition-all duration-300 hover:scale-105 active:scale-95"
+              title="Sign in to your Mythora account"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => {
+                sound.playPaperRustle();
+                openAuthModal('signup');
+              }}
+              className="px-4 sm:px-5 py-2 rounded-full bg-gradient-to-r from-[#C49A61] via-[#DDB47D] to-[#C49A61] hover:brightness-110 text-[#140E0A] font-sans text-xs uppercase tracking-wider font-bold shadow-[0_2px_18px_rgba(196,154,97,0.4)] transition-all duration-300 hover:scale-105 active:scale-95"
+              title="Create a new Mythora account"
+            >
+              Create an Account
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 3D WebGL Canvas */}
       <div 
         ref={containerRef} 
@@ -591,41 +641,87 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
             textShadow: '0 2px 14px rgba(243, 226, 194, 0.4), 0 0 28px rgba(196, 154, 97, 0.32), 0 0 55px rgba(196, 154, 97, 0.16), 0 3px 6px rgba(0, 0, 0, 0.85)'
           }}
         >
-          StoryWeave AI
+          Mythora
         </h1>
       </div>
 
-      {/* Beautiful, Luxurious Enter Studio Button */}
-      <button 
-        onClick={handleEnterStudio}
-        className="absolute bottom-9 left-1/2 -translate-x-1/2 z-[30] cursor-pointer group flex items-center gap-3.5 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#18120C]/95 via-[#231A12]/95 to-[#18120C]/95 backdrop-blur-xl border border-[#C49A61]/60 hover:border-[#F3D4A0] ring-1 ring-[#C49A61]/25 hover:ring-[#F3D4A0]/50 shadow-[0_4px_30px_rgba(0,0,0,0.85),0_0_28px_rgba(196,154,97,0.38)] hover:shadow-[0_4px_35px_rgba(0,0,0,0.9),0_0_48px_rgba(196,154,97,0.7)] hover:scale-[1.04] active:scale-[0.97] transition-all duration-300 pointer-events-auto"
-        title="Enter StoryWeave AI Studio"
-      >
-        {/* Subtle decorative gold sparkle */}
-        <span className="text-[#C49A61] group-hover:text-[#F3D4A0] text-xs transition-colors duration-300 select-none">
-          ✦
-        </span>
+      {/* Landing Page Central Authentication Gate (Replaces Enter Studio guest button) */}
+      <div className="absolute bottom-9 left-1/2 -translate-x-1/2 z-[30] flex items-center justify-center gap-3 sm:gap-4 pointer-events-auto">
+        {!user ? (
+          <>
+            {/* Sign In Button */}
+            <button 
+              onClick={() => {
+                sound.playPaperRustle();
+                openAuthModal('signin');
+              }}
+              className="cursor-pointer group flex items-center gap-2.5 px-6 sm:px-7 py-3 sm:py-3.5 rounded-full bg-gradient-to-r from-[#18120C]/95 via-[#231A12]/95 to-[#18120C]/95 backdrop-blur-xl border border-[#C49A61]/60 hover:border-[#F3D4A0] ring-1 ring-[#C49A61]/25 hover:ring-[#F3D4A0]/50 shadow-[0_4px_30px_rgba(0,0,0,0.85),0_0_20px_rgba(196,154,97,0.3)] hover:shadow-[0_4px_35px_rgba(0,0,0,0.9),0_0_35px_rgba(196,154,97,0.6)] hover:scale-[1.04] active:scale-[0.97] transition-all duration-300"
+              title="Sign in to your Mythora account"
+            >
+              <span className="text-[#C49A61] group-hover:text-[#F3D4A0] text-xs transition-colors duration-300 select-none">
+                ✦
+              </span>
+              <span className="text-xs sm:text-[13px] tracking-[0.24em] uppercase font-sans font-bold text-[#F3D4A0] group-hover:text-white transition-colors duration-300 drop-shadow-sm select-none">
+                Sign In
+              </span>
+            </button>
 
-        {/* Button Label */}
-        <span className="text-xs sm:text-[13px] tracking-[0.28em] uppercase font-sans font-bold text-[#F3D4A0] group-hover:text-white transition-colors duration-300 drop-shadow-sm select-none">
-          Enter Studio
-        </span>
-
-        {/* Circular Gold Badge with Forward Arrow */}
-        <div className="w-5 h-5 rounded-full bg-[#C49A61]/20 group-hover:bg-[#C49A61]/40 border border-[#C49A61]/50 group-hover:border-[#F3D4A0] flex items-center justify-center transition-all duration-300">
-          <svg 
-            className="w-3 h-3 text-[#F3D4A0] group-hover:text-white group-hover:translate-x-0.5 transition-all duration-300" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2.4" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
+            {/* Create an Account Button */}
+            <button 
+              onClick={() => {
+                sound.playPaperRustle();
+                openAuthModal('signup');
+              }}
+              className="cursor-pointer group flex items-center gap-3 px-6 sm:px-8 py-3 sm:py-3.5 rounded-full bg-gradient-to-r from-[#C49A61] via-[#E2BE86] to-[#C49A61] hover:brightness-110 shadow-[0_4px_30px_rgba(0,0,0,0.85),0_0_28px_rgba(196,154,97,0.45)] hover:shadow-[0_4px_35px_rgba(0,0,0,0.9),0_0_48px_rgba(196,154,97,0.75)] hover:scale-[1.04] active:scale-[0.97] transition-all duration-300"
+              title="Create a new Mythora account"
+            >
+              <span className="text-xs sm:text-[13px] tracking-[0.24em] uppercase font-sans font-bold text-[#140E0A] transition-colors duration-300 drop-shadow-sm select-none">
+                Create Account
+              </span>
+              <div className="w-5 h-5 rounded-full bg-[#140E0A]/20 border border-[#140E0A]/30 flex items-center justify-center transition-all duration-300">
+                <svg 
+                  className="w-3 h-3 text-[#140E0A] group-hover:translate-x-0.5 transition-all duration-300" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2.6" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14M13 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+          </>
+        ) : (
+          /* Authenticated User: Enter Studio Button */
+          <button 
+            onClick={handleEnterStudio}
+            className="cursor-pointer group flex items-center gap-3.5 px-8 py-3.5 rounded-full bg-gradient-to-r from-[#18120C]/95 via-[#231A12]/95 to-[#18120C]/95 backdrop-blur-xl border border-[#C49A61]/70 hover:border-[#F3D4A0] ring-1 ring-[#C49A61]/30 hover:ring-[#F3D4A0]/60 shadow-[0_4px_30px_rgba(0,0,0,0.85),0_0_28px_rgba(196,154,97,0.4)] hover:shadow-[0_4px_35px_rgba(0,0,0,0.9),0_0_48px_rgba(196,154,97,0.7)] hover:scale-[1.04] active:scale-[0.97] transition-all duration-300"
+            title="Enter Mythora Studio"
           >
-            <path d="M5 12h14M13 5l7 7-7 7" />
-          </svg>
-        </div>
-      </button>
+            <span className="text-[#C49A61] group-hover:text-[#F3D4A0] text-xs transition-colors duration-300 select-none">
+              ✦
+            </span>
+            <span className="text-xs sm:text-[13px] tracking-[0.28em] uppercase font-sans font-bold text-[#F3D4A0] group-hover:text-white transition-colors duration-300 drop-shadow-sm select-none">
+              Enter Studio
+            </span>
+            <div className="w-5 h-5 rounded-full bg-[#C49A61]/20 group-hover:bg-[#C49A61]/40 border border-[#C49A61]/50 group-hover:border-[#F3D4A0] flex items-center justify-center transition-all duration-300">
+              <svg 
+                className="w-3 h-3 text-[#F3D4A0] group-hover:text-white group-hover:translate-x-0.5 transition-all duration-300" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2.4" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M5 12h14M13 5l7 7-7 7" />
+              </svg>
+            </div>
+          </button>
+        )}
+      </div>
     </section>
   );
 };

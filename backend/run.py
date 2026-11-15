@@ -18,5 +18,5 @@ if __name__ == "__main__":
         from app.config import HOST, PORT
         app_target = "app.main:app"
 
-    print(f"Starting StoryWeave AI Backend on http://{HOST}:{PORT} ...")
+    print(f"Starting Mythora Backend on http://{HOST}:{PORT} ...")
     uvicorn.run(app_target, host=HOST, port=PORT, reload=True)

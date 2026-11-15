@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import os
@@ -7,6 +7,7 @@ import uuid
 from ..models import Story, StoryCreate, StoryUpdate
 from ..services.db_service import db_service
 from ..services.ai_service import ai_service
+from ..services.auth_service import get_optional_user
 from ..config import UPLOADS_DIR
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -29,13 +30,16 @@ def _validate_image_file(file: UploadFile):
 router = APIRouter(prefix="/api/stories", tags=["Stories"])
 
 @router.get("", response_model=List[Story])
-def get_all_stories():
-    return db_service.get_stories()
+def get_all_stories(user: Optional[Dict[str, Any]] = Depends(get_optional_user)):
+    user_id = user.get("uid") if user else None
+    return db_service.get_stories(user_id=user_id)
 
 @router.post("", response_model=Story)
-def create_story(data: StoryCreate):
+def create_story(data: StoryCreate, user: Optional[Dict[str, Any]] = Depends(get_optional_user)):
     story_dict = data.dict()
     story_dict["id"] = f"story_{uuid.uuid4().hex[:10]}"
+    if user and user.get("uid"):
+        story_dict["user_id"] = user["uid"]
     return db_service.save_story(story_dict)
 
 @router.get("/{story_id}", response_model=Story)

@@ -44,6 +44,23 @@ def update_chapter(chapter_id: str, data: ChapterUpdate):
     if not existing:
         raise HTTPException(status_code=404, detail="Chapter not found")
     update_data = {k: v for k, v in data.dict().items() if v is not None}
+
+    # Manuscript protection: Never allow empty or blank-placeholder content
+    # to overwrite non-empty existing prose
+    if "content" in update_data:
+        incoming_c = update_data["content"].strip()
+        existing_c = (existing.get("content") or "").strip()
+        if (incoming_c == "" or incoming_c == "<p><br></p>") and (existing_c != "" and existing_c != "<p><br></p>"):
+            # Preserve existing prose
+            update_data.pop("content")
+
+    # If pages are provided, also persist them individually
+    if "pages" in update_data and update_data["pages"]:
+        for p in update_data["pages"]:
+            p_dict = p.dict() if hasattr(p, "dict") else dict(p)
+            p_dict["chapter_id"] = chapter_id
+            db_service.save_page(chapter_id, p_dict, sync_chapter=False)
+
     existing.update(update_data)
     saved = db_service.save_chapter(existing)
     
@@ -54,46 +71,6 @@ def update_chapter(chapter_id: str, data: ChapterUpdate):
             vector_service.index_chapter(story_id, saved)
         except Exception as e:
             print(f"[Chapter Re-Indexing Error] {e}")
-
-    # Auto-extract new characters mentioned in the manuscript update
-    if "content" in update_data and len(update_data["content"]) > 60:
-        if story_id:
-            try:
-                story = db_service.get_story(story_id)
-                genre = story.get("genre", "Fiction") if story else "Fiction"
-                existing_chars = db_service.get_characters(story_id)
-                existing_names = {c.get("name", "").strip().lower() for c in existing_chars}
-                extracted = ai_service.extract_characters_from_text(
-                    text=update_data["content"],
-                    existing_characters=existing_chars,
-                    story_genre=genre
-                )
-                for item in extracted:
-                    c_name = item.get("name", "").strip()
-                    if c_name and c_name.lower() not in existing_names:
-                        new_char = {
-                            "id": f"char_{uuid.uuid4().hex[:10]}",
-                            "story_id": story_id,
-                            "name": c_name,
-                            "alias": item.get("alias", ""),
-                            "age": str(item.get("age", "")),
-                            "role": item.get("role", "Supporting"),
-                            "personality_traits": item.get("personality_traits", ["Determined"]),
-                            "physical_description": item.get("physical_description", ""),
-                            "backstory": item.get("backstory", f"Introduced in Chapter {existing.get('chapter_number', 1)}."),
-                            "motivations": item.get("motivations", ""),
-                            "goals": item.get("goals", ""),
-                            "fears": item.get("fears", ""),
-                            "secrets": item.get("secrets", ""),
-                            "current_status": item.get("status", "Alive"),
-                            "first_appearance": f"Chapter {existing.get('chapter_number', 1)}",
-                            "last_appearance": f"Chapter {existing.get('chapter_number', 1)}",
-                            "relationships": []
-                        }
-                        db_service.save_character(new_char)
-                        existing_names.add(c_name.lower())
-            except Exception as e:
-                print(f"[Chapter Save Auto-Sync Notice] {e}")
 
     return saved
 
@@ -135,14 +112,21 @@ def get_chapter_page(chapter_id: str, page_id: str):
 def update_chapter_page(chapter_id: str, page_id: str, data: PageUpdate):
     page = db_service.get_page(chapter_id, page_id)
     if not page:
-        raise HTTPException(status_code=404, detail="Page not found")
+        # Auto-upsert page instead of 404
+        page = {
+            "id": page_id,
+            "chapter_id": chapter_id,
+            "page_number": data.page_number if data.page_number is not None else 1,
+            "content": data.content or "",
+            "save_status": data.save_status or "saved"
+        }
+        return db_service.save_page(chapter_id, page, sync_chapter=True)
 
     if data.content is not None:
         incoming = data.content.strip()
-        existing_content = page.get("content", "").strip()
+        existing_content = (page.get("content") or "").strip()
         if (incoming == "" or incoming == "<p><br></p>") and (existing_content != "" and existing_content != "<p><br></p>"):
-            if data.save_status in ["init", "default"]:
-                return page
+            return page
         page["content"] = data.content
 
     if data.page_number is not None:

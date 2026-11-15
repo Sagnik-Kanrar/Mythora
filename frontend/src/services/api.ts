@@ -16,6 +16,7 @@ import {
   InvestigationConnection
 } from '../types';
 import rawMockData from '../data/mockStore.json';
+import { auth } from './firebase';
 
 const API_BASE = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : '';
 
@@ -25,9 +26,19 @@ const localStore: any = JSON.parse(JSON.stringify(rawMockData));
 class ApiService {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
-    const headers = {
+    let authToken = '';
+    if (auth.currentUser) {
+      try {
+        authToken = await auth.currentUser.getIdToken();
+      } catch (e) {
+        console.warn("[API] Could not get fresh ID token:", e);
+      }
+    }
+
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers || {})
+      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+      ...(options.headers as any || {})
     };
 
     try {
@@ -996,18 +1007,52 @@ class ApiService {
     }
   }
 
+  async investigationBoardChat(
+    storyId: string,
+    query: string,
+    cardId?: string
+  ): Promise<{
+    answer: string;
+    citations: string[];
+    confidence: string;
+    highlight_card_ids: string[];
+  }> {
+    try {
+      return await this.request<{
+        answer: string;
+        citations: string[];
+        confidence: string;
+        highlight_card_ids: string[];
+      }>(`/api/stories/${storyId}/investigation-board/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ query, card_id: cardId })
+      });
+    } catch {
+      return {
+        answer: `### 🔍 Forensic Analysis\n\nInvestigating inquiry regarding **${query}** across story canon.\n\n- **Status:** Evaluated against established manuscript records.\n- **Evidence Check:** Active cards and red strings indicate interconnected narrative threads.\n- **Recommendation:** Verify chronological order of index cards and character alibis on the board.`,
+        citations: ['Manuscript Canon'],
+        confidence: 'SUPPORTED INFERENCE',
+        highlight_card_ids: cardId ? [cardId] : []
+      };
+    }
+  }
+
   private generateFallbackInvestigationBoard(storyId: string): InvestigationBoardState {
+    const stories = Object.values(localStore.stories || {}) as any[];
+    const currentStory = stories.find(s => s.id === storyId) || { title: 'Case Archive', genre: 'Mystery', setting: 'Coastal Harbor' };
     const chars = Object.values(localStore.characters || {}).filter((c: any) => c.story_id === storyId) as Character[];
     const timeline = Object.values(localStore.events || {}).filter((e: any) => e.story_id === storyId) as TimelineEvent[];
+    const memories = Object.values(localStore.memories || {}).filter((m: any) => m.story_id === storyId) as any[];
 
+    const caseNum = storyId.length >= 4 ? storyId.slice(-4).toUpperCase() : '01A';
     const elements: InvestigationCard[] = [
       {
         id: `card_dossier_${storyId}`,
         story_id: storyId,
         type: 'clue',
-        title: 'CASE FILE: #47A',
-        subtitle: 'ACTIVE INVESTIGATION',
-        description: 'INQUIRY: THE OBSIDIAN KEY OF RAVENSCAR\nSTATUS: ACTIVE CONTINUITY INQUIRY',
+        title: `CASE FILE: #${caseNum}`,
+        subtitle: `ACTIVE INVESTIGATION • ${currentStory.genre || 'MYSTERY'}`,
+        description: `INQUIRY: ${currentStory.title.toUpperCase()}\nSTATUS: ACTIVE CONTINUITY INQUIRY\nSETTING: ${(currentStory.setting || 'Coastal Harbor').toUpperCase()}`,
         status: 'verified',
         is_pinned: true,
         color: 'aged',
@@ -1017,54 +1062,31 @@ class ApiService {
         id: `card_surv_${storyId}`,
         story_id: storyId,
         type: 'clue',
-        title: '24/7 SURVEILLANCE',
-        subtitle: 'Harbor Slip 4',
-        description: 'Night watch ordered. Track courier departures.',
+        title: '24/7 SURVEILLANCE ORDER',
+        subtitle: 'Field Observation',
+        description: `Subject movements monitored around ${currentStory.setting || 'the estate'}. Maintain distance.`,
         status: 'unverified',
         is_pinned: false,
         color: 'yellow',
         position: { x: 310, y: 70 }
       },
       {
-        id: `card_loc_manor_${storyId}`,
+        id: `card_loc_primary_${storyId}`,
         story_id: storyId,
         type: 'location',
-        title: 'Blackwood Cliffside Manor',
-        subtitle: 'Location • Chapter 1 & 2',
-        description: 'Gothic estate on north bluffs. Broken second-floor window.',
+        title: currentStory.setting || 'Crime Scene Coordinates',
+        subtitle: 'Location • Primary Coordinates',
+        description: `Key events and inquiries unfold at ${currentStory.setting || 'the primary coordinates'}.`,
         image_url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop',
         status: 'verified',
         color: 'aged',
         position: { x: 560, y: 60 }
-      },
-      {
-        id: `card_loc_archive_${storyId}`,
-        story_id: storyId,
-        type: 'location',
-        title: 'The Whispering Archives & Lighthouse',
-        subtitle: 'Location • Chapter 3',
-        description: 'Subterranean stone vault beneath the Ravenscar beacon.',
-        image_url: 'https://images.unsplash.com/photo-1519074069444-1ba4ea16e6f5?q=80&w=800&auto=format&fit=crop',
-        status: 'verified',
-        color: 'aged',
-        position: { x: 840, y: 70 }
-      },
-      {
-        id: `card_loc_harbor_${storyId}`,
-        story_id: storyId,
-        type: 'location',
-        title: 'Ravenscar Maritime Harbor (Slip 4)',
-        subtitle: 'Location • Chapter 1',
-        description: 'Damp pier where anonymous courier delivered the salt-soaked watch.',
-        image_url: 'https://images.unsplash.com/photo-1509316975850-ff9c5deb0cd9?q=80&w=800&auto=format&fit=crop',
-        status: 'verified',
-        color: 'aged',
-        position: { x: 580, y: 320 }
       }
     ];
 
     // Add characters
     chars.forEach((c, idx) => {
+      const isAntag = c.role.toLowerCase().includes('antagonist') || c.role.toLowerCase().includes('suspect');
       elements.push({
         id: `card_char_${c.id}`,
         story_id: storyId,
@@ -1073,51 +1095,41 @@ class ApiService {
         subtitle: `${c.role} • ${c.current_status}`,
         description: c.physical_description || c.backstory || 'Subject in inquiry.',
         image_url: c.portrait_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop',
-        status: c.role.toLowerCase().includes('antagonist') ? 'suspect' : 'alive',
-        is_culprit: c.name.includes('Alistair'),
+        status: isAntag ? 'suspect' : 'alive',
+        is_culprit: idx === 1 || isAntag,
         color: 'polaroid',
-        position: { x: 80 + idx * 220, y: 560 + (idx % 2 * 20) },
+        position: { x: 80 + idx * 240, y: 560 + (idx % 2 * 20) },
         metadata: { character_id: c.id, role: c.role }
       });
     });
 
     // Add evidence
+    const evTitle1 = memories[0]?.title || 'Waterlogged Pocket Watch';
+    const evTitle2 = memories[1]?.title || 'Forged Estate Ledger';
     elements.push(
       {
-        id: `card_ev_watch_${storyId}`,
+        id: `card_ev_1_${storyId}`,
         story_id: storyId,
         type: 'evidence',
-        title: 'Waterlogged Pocket Watch',
+        title: evTitle1,
         subtitle: 'Evidence • Chapter 1',
-        description: 'Stopped precisely at 11:40 PM. Roman numerals encircle a concealed brass astronomical compass.',
+        description: memories[0]?.content || 'Stopped precisely at critical timestamp. Conceals engraved coordinates.',
         image_url: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?q=80&w=800&auto=format&fit=crop',
         status: 'verified',
         color: 'aged',
         position: { x: 80, y: 880 }
       },
       {
-        id: `card_ev_ledger_${storyId}`,
+        id: `card_ev_2_${storyId}`,
         story_id: storyId,
         type: 'evidence',
-        title: 'Forged Estate Ledger',
+        title: evTitle2,
         subtitle: 'Evidence • Chapter 2',
-        description: 'Records dating to 1892 reveal payments to Julian Calder signed under a forged Blackwood crest.',
+        description: memories[1]?.content || 'Financial document revealing clandestine payoffs preceding the incident.',
         image_url: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?q=80&w=800&auto=format&fit=crop',
         status: 'verified',
         color: 'aged',
         position: { x: 340, y: 890 }
-      },
-      {
-        id: `card_ev_sigil_${storyId}`,
-        story_id: storyId,
-        type: 'evidence',
-        title: 'The Obsidian Sigil Key',
-        subtitle: 'Evidence • Chapter 3',
-        description: 'Carved volcanic glass pulsing faintly when brought near salt water.',
-        image_url: 'https://images.unsplash.com/photo-1516962215378-7fa2e137ae93?q=80&w=800&auto=format&fit=crop',
-        status: 'verified',
-        color: 'aged',
-        position: { x: 620, y: 880 }
       }
     );
 
@@ -1144,7 +1156,7 @@ class ApiService {
         type: 'clue',
         title: 'MEETING POINT X',
         subtitle: 'Observation',
-        description: 'Wharf lights doused at 02:00 AM. Who signaled the skiff from south breakwater?',
+        description: `Lights doused along ${currentStory.setting || 'the coast'} at midnight. Unidentified vessel spotted.`,
         color: 'yellow',
         status: 'unverified',
         position: { x: 350, y: 340 }
@@ -1153,47 +1165,53 @@ class ApiService {
         id: `card_sticky_drop_${storyId}`,
         story_id: storyId,
         type: 'clue',
-        title: 'DEAD DROP 5/12',
+        title: 'WITNESS STATEMENT',
         subtitle: 'Observation',
-        description: 'Iron locker under lighthouse pier. Check tide schedule before midnight attempt.',
-        color: 'pink',
+        description: 'Watchman confirms suspicious footprints leading toward the bluffs.',
+        color: 'green',
         status: 'unverified',
-        position: { x: 930, y: 350 }
+        position: { x: 90, y: 330 }
       }
     );
 
     const connections: InvestigationConnection[] = [
       {
         id: `conn_1_${storyId}`,
-        source_id: `card_loc_manor_${storyId}`,
-        target_id: `card_ev_watch_${storyId}`,
+        source_id: `card_loc_primary_${storyId}`,
+        target_id: `card_ev_1_${storyId}`,
         label: 'Tide coordinates match estate',
         type: 'location'
-      },
-      {
-        id: `conn_2_${storyId}`,
-        source_id: `card_ev_ledger_${storyId}`,
-        target_id: `card_loc_manor_${storyId}`,
-        label: 'Recovered from conservatory desk',
-        type: 'evidence'
       }
     ];
+
+    if (chars.length >= 2) {
+      connections.push({
+        id: `conn_chars_main_${storyId}`,
+        source_id: `card_char_${chars[0].id}`,
+        target_id: `card_char_${chars[1].id}`,
+        label: 'Conflicting alibi & timeline',
+        type: 'contradiction',
+        is_contradiction: true
+      });
+    }
 
     if (chars.length > 0) {
       connections.push({
         id: `conn_char_ev_${storyId}`,
         source_id: `card_char_${chars[0].id}`,
-        target_id: `card_ev_watch_${storyId}`,
-        label: 'Possesses the missing object',
+        target_id: `card_ev_1_${storyId}`,
+        label: 'Possesses key cipher',
         type: 'evidence'
       });
     }
+
+    const culpritCandidate = chars.find(c => c.role.toLowerCase().includes('antagonist') || c.role.toLowerCase().includes('suspect')) || chars[1] || chars[0];
 
     return {
       story_id: storyId,
       elements,
       connections,
-      culprit_id: chars.find(c => c.name.includes('Alistair')) ? `card_char_${chars.find(c => c.name.includes('Alistair'))!.id}` : null,
+      culprit_id: culpritCandidate ? `card_char_${culpritCandidate.id}` : null,
       zoom: 1.0,
       pan_offset: { x: 0, y: 0 },
       updated_at: new Date().toISOString()
@@ -1255,15 +1273,36 @@ class ApiService {
   }
 
   // Manuscript Character Synchronization
-  async syncStoryCharacters(storyId: string): Promise<{ synced_count: number; new_characters: Character[]; characters: Character[] }> {
+  async syncStoryCharacters(storyId: string): Promise<{
+    synced_count: number;
+    added_count: number;
+    updated_count: number;
+    unchanged_count: number;
+    new_characters: Character[];
+    characters: Character[];
+  }> {
     try {
-      return await this.request<{ synced_count: number; new_characters: Character[]; characters: Character[] }>(`/api/stories/${storyId}/characters/sync`, {
+      return await this.request<{
+        synced_count: number;
+        added_count: number;
+        updated_count: number;
+        unchanged_count: number;
+        new_characters: Character[];
+        characters: Character[];
+      }>(`/api/stories/${storyId}/characters/sync`, {
         method: 'POST',
       });
     } catch {
       const list = Object.values(localStore.characters || {}) as Character[];
       const filtered = list.filter(c => c.story_id === storyId);
-      return { synced_count: 0, new_characters: [], characters: filtered };
+      return {
+        synced_count: 0,
+        added_count: 0,
+        updated_count: 0,
+        unchanged_count: filtered.length,
+        new_characters: [],
+        characters: filtered,
+      };
     }
   }
 

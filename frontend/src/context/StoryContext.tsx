@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Story, Chapter, Genre } from '../types';
 import { api } from '../services/api';
 import { sound } from '../services/audioService';
+import { auth } from '../services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export interface ToastMessage {
   id: string;
@@ -88,6 +90,10 @@ export const StoryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   useEffect(() => {
     refreshStories();
+    const unsub = onAuthStateChanged(auth, () => {
+      refreshStories();
+    });
+    return () => unsub();
   }, []);
 
   const setActiveStoryId = (id: string) => {

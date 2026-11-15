@@ -116,7 +116,7 @@ def reindex_story_universe(story_id: str):
 @router.post("/api/stories/{story_id}/universe-query")
 def answer_universe_memory_query(story_id: str, payload: Dict[str, Any]):
     """
-    StoryWeave Universe Memory RAG Answer Engine:
+    Mythora Universe Memory RAG Answer Engine:
     Retrieves evidence across all chapters via ChromaDB semantic search and generates
     an authentic, strictly grounded response with exact chapter citations and uncertainty signaling.
     """
@@ -186,7 +186,7 @@ def answer_universe_memory_query(story_id: str, payload: Dict[str, Any]):
 
     # 4. Generate Grounded Answer using Gemini
     system_instruction = (
-        "You are StoryWeave Universe Memory, an intelligent assistant that understands the user's fictional universe.\n\n"
+        "You are Mythora Universe Memory, an intelligent assistant that understands the user's fictional universe.\n\n"
         "Answer questions using retrieved manuscript evidence.\n\n"
         "Rules:\n"
         "- Answer the exact question directly.\n"

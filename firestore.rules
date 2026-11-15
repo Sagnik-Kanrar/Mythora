@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── USERS COLLECTION ──
+    // Users can read public profiles and manage strictly their own document.
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // ── USERNAMES UNIQUENESS REGISTRY ──
+    // Case-insensitive unique usernames registry.
+    // Document ID is username in lowercase.
+    match /usernames/{usernameLowercase} {
+      allow read: if true;
+      allow create: if request.auth != null 
+                    && request.resource.data.uid == request.auth.uid
+                    && !exists(/databases/$(database)/documents/usernames/$(usernameLowercase));
+      allow update, delete: if false;
+    }
+  }
+}

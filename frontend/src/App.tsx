@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StoryProvider, useStory } from './context/StoryContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthModal } from './components/auth/AuthModal';
 import { Navbar, NavTab } from './components/common/Navbar';
 import { BookHero } from './components/common/BookHero';
+import { ArchiveManualModal } from './components/manual/ArchiveManualModal';
 import { HomeDesk } from './pages/HomeDesk';
 import { MyStories } from './pages/MyStories';
 import { StoryArchitect } from './pages/StoryArchitect';
@@ -78,6 +81,10 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 }
 
 const MainContent: React.FC = () => {
+  const { user, loading, openAuthModal } = useAuth();
+  const [manualOpen, setManualOpen] = useState(false);
+  const prevUserRef = useRef<any>(undefined);
+
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
     if (typeof window === 'undefined') return 'home';
     const params = new URLSearchParams(window.location.search);
@@ -104,32 +111,53 @@ const MainContent: React.FC = () => {
 
   // Check whether user requested the Studio view or the Landing Hero view
   const [isStudioView, setIsStudioView] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     const path = window.location.pathname.toLowerCase();
-    const search = window.location.search.toLowerCase();
-    const hash = window.location.hash.toLowerCase();
-
-    // Check if specifically requesting studio
-    if (
-      path.includes('studio') ||
-      search.includes('studio') ||
-      hash.includes('studio') ||
-      search.includes('tab') ||
-      search.includes('character')
-    ) {
-      return true;
-    }
-
-    // Root paths or folio page always show the 3D Bookshop hero
     if (path.endsWith('folio.html') || path === '/' || path === '' || path.includes('folio')) {
       return false;
     }
-
     return true;
   });
 
+  // Open the interactive Manual Book automatically when someone signs in
+  useEffect(() => {
+    if (!loading && user) {
+      if (prevUserRef.current === null || prevUserRef.current === undefined) {
+        const seenKey = `mythora_manual_seen_${user.uid}`;
+        if (!sessionStorage.getItem(seenKey)) {
+          sessionStorage.setItem(seenKey, 'true');
+          setManualOpen(true);
+        }
+      }
+    }
+    prevUserRef.current = user;
+  }, [user, loading]);
+
+  // Centralized Authentication Guard: Protect all internal pages and direct URLs
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      // Unauthenticated visitor: completely block all studio access
+      setIsStudioView(false);
+      const search = window.location.search;
+      const path = window.location.pathname;
+      if (search.includes('tab=') || search.includes('view=studio') || search.includes('character') || path.includes('studio')) {
+        try {
+          window.history.replaceState({}, '', '/');
+        } catch {}
+        openAuthModal('signin');
+      }
+    }
+  }, [user, loading, openAuthModal]);
+
   useEffect(() => {
     const handleUrlChange = () => {
+      if (!user) {
+        setIsStudioView(false);
+        return;
+      }
+
       const path = window.location.pathname.toLowerCase();
       const search = window.location.search.toLowerCase();
       const hash = window.location.hash.toLowerCase();
@@ -160,7 +188,7 @@ const MainContent: React.FC = () => {
       window.removeEventListener('popstate', handleUrlChange);
       window.removeEventListener('hashchange', handleUrlChange);
     };
-  }, []);
+  }, [user]);
 
   // Antique Fountain Pen Cursor System: Click State & Golden Ripple Effect
   useEffect(() => {
@@ -252,6 +280,10 @@ const MainContent: React.FC = () => {
   };
 
   const handleEnterStudio = () => {
+    if (!user) {
+      openAuthModal('signin');
+      return;
+    }
     try {
       localStorage.setItem('storyweave_active_view', 'studio');
     } catch {}
@@ -268,8 +300,24 @@ const MainContent: React.FC = () => {
     }
   };
 
-  // 1. LANDING PAGE VIEW: Dedicated 3D Bookshop Landing Page (when explicitly on folio)
-  if (!isStudioView) {
+  // Loading Screen: Prevent flashing of protected content while auth session resolves
+  if (loading) {
+    return (
+      <div className="w-full h-screen bg-[#0C0A08] flex flex-col items-center justify-center text-[#E0D7C7] font-serif select-none">
+        <div className="relative flex flex-col items-center space-y-4">
+          <div className="w-14 h-14 rounded-full border-2 border-[#C49A61]/50 border-t-transparent animate-spin flex items-center justify-center shadow-[0_0_25px_rgba(196,154,97,0.35)]">
+            <span className="text-[#C49A61] text-lg font-bold font-serif select-none">✦</span>
+          </div>
+          <p className="font-typewriter text-xs uppercase tracking-[0.25em] text-[#C49A61]">
+            Verifying Investigator Credentials...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. MANDATORY AUTHENTICATION GATE: Unauthenticated visitors or explicit landing page
+  if (!isStudioView || !user) {
     return (
       <div className="w-full h-screen overflow-hidden bg-black select-none">
         <BookHero onContinue={handleEnterStudio} />
@@ -307,6 +355,7 @@ const MainContent: React.FC = () => {
         currentTab={currentTab}
         onSelectTab={(tab) => handleNavigate(tab)}
         onOpenSettings={() => setSettingsOpen(false)}
+        onOpenManual={() => setManualOpen(true)}
       />
 
       {/* Main Investigation Stage */}
@@ -347,6 +396,12 @@ const MainContent: React.FC = () => {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+
+      {/* Interactive Manual Book of Every Chamber */}
+      <ArchiveManualModal
+        isOpen={manualOpen}
+        onClose={() => setManualOpen(false)}
+      />
     </div>
   );
 };
@@ -354,10 +409,13 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <AppErrorBoundary>
-      <StoryProvider>
-        <MainContent />
-        <PacingAlertModal />
-      </StoryProvider>
+      <AuthProvider>
+        <StoryProvider>
+          <MainContent />
+          <AuthModal />
+          <PacingAlertModal />
+        </StoryProvider>
+      </AuthProvider>
     </AppErrorBoundary>
   );
 }
