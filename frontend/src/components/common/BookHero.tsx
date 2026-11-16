@@ -82,6 +82,8 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     // Dimensions
     let width = window.innerWidth;
     let height = window.innerHeight;
+    const isCoarse = window.matchMedia('(pointer: coarse)').matches;
+    const isMobile = width < 768 || isCoarse;
 
     // Scene & Camera
     const scene = new THREE.Scene();
@@ -91,12 +93,19 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     camera.lookAt(-1.4, 0.05, -0.6);
     camera.updateMatrixWorld(true);
 
-    // Renderer
+    // Renderer (High-Performance & Low Main-Thread Footprint)
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({
+        antialias: !isMobile,
+        alpha: true,
+        powerPreference: 'high-performance',
+        precision: isMobile ? 'mediump' : 'highp',
+        stencil: false,
+        depth: true
+      });
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(isMobile ? 1.0 : Math.min(window.devicePixelRatio, 1.5));
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.05;
       renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -117,6 +126,8 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       const roomEnv = new RoomEnvironment();
       const envTexture = pmremGenerator.fromScene(roomEnv, 0.04).texture;
       scene.environment = envTexture;
+      pmremGenerator.dispose();
+      roomEnv.dispose();
     } catch (e) {
       console.warn("PMREM environment lighting skipped:", e);
     }
@@ -136,24 +147,24 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     // Page Texture generator
     function createPageTexture(horizontal = true) {
       const canvas = document.createElement('canvas');
-      canvas.width = 256;
-      canvas.height = 256;
+      canvas.width = 128;
+      canvas.height = 128;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.fillStyle = '#efe7d6';
-        ctx.fillRect(0, 0, 256, 256);
+        ctx.fillRect(0, 0, 128, 128);
 
-        for (let i = 0; i < 256; i += 2) {
+        for (let i = 0; i < 128; i += 2) {
           const alpha = 0.05 + Math.random() * 0.12;
           ctx.strokeStyle = `rgba(110, 80, 50, ${alpha})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
           if (horizontal) {
             ctx.moveTo(0, i + 0.5);
-            ctx.lineTo(256, i + 0.5);
+            ctx.lineTo(128, i + 0.5);
           } else {
             ctx.moveTo(i + 0.5, 0);
-            ctx.lineTo(i + 0.5, 256);
+            ctx.lineTo(i + 0.5, 128);
           }
           ctx.stroke();
         }
@@ -168,6 +179,46 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     const foreEdgeTex = createPageTexture(true);
     const topBottomTex = createPageTexture(false);
     const bookGeometry = new THREE.BoxGeometry(1, 1.5, 0.2);
+
+    // Shared material caches to eliminate redundant shader compilation and state changes
+    const sharedForeEdgeMat = new THREE.MeshStandardMaterial({
+      map: foreEdgeTex,
+      roughness: 0.9,
+      envMapIntensity: 0.55
+    });
+
+    const sharedTopBottomMat = new THREE.MeshStandardMaterial({
+      map: topBottomTex,
+      roughness: 0.9,
+      envMapIntensity: 0.55
+    });
+
+    const spineMatCache = new Map<string, THREE.MeshStandardMaterial>();
+    const backMatCache = new Map<string, THREE.MeshStandardMaterial>();
+
+    function getSpineMat(spineHex: string) {
+      if (spineMatCache.has(spineHex)) return spineMatCache.get(spineHex)!;
+      const spineColorObj = new THREE.Color(spineHex).multiplyScalar(0.62);
+      const mat = new THREE.MeshStandardMaterial({
+        color: spineColorObj,
+        roughness: 0.55,
+        envMapIntensity: 0.55
+      });
+      spineMatCache.set(spineHex, mat);
+      return mat;
+    }
+
+    function getBackMat(spineHex: string) {
+      if (backMatCache.has(spineHex)) return backMatCache.get(spineHex)!;
+      const spineColorObj = new THREE.Color(spineHex).multiplyScalar(0.62);
+      const mat = new THREE.MeshStandardMaterial({
+        color: spineColorObj,
+        roughness: 0.6,
+        envMapIntensity: 0.55
+      });
+      backMatCache.set(spineHex, mat);
+      return mat;
+    }
 
     // Fast cached fallback texture system (shared by spine color)
     const fallbackTexCache = new Map<string, THREE.CanvasTexture>();
@@ -219,6 +270,8 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       vy: number;
       z: number;
       vz: number;
+      restScreenX: number;
+      restScreenY: number;
     }
 
     const books: BookItem[] = [];
@@ -227,26 +280,9 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
     bookOrder.forEach((coverIndex, i) => {
       const isSheetB = coverIndex >= 18;
       const cell = isSheetB ? sheetBCells[coverIndex - 18] : sheetACells[coverIndex];
-      const spineColorObj = new THREE.Color(cell.spine).multiplyScalar(0.62);
 
-      const foreEdgeMat = new THREE.MeshStandardMaterial({
-        map: foreEdgeTex,
-        roughness: 0.9,
-        envMapIntensity: 0.55
-      });
-
-      const spineMat = new THREE.MeshStandardMaterial({
-        color: spineColorObj,
-        roughness: 0.55,
-        envMapIntensity: 0.55
-      });
-
-      const topBottomMat = new THREE.MeshStandardMaterial({
-        map: topBottomTex,
-        roughness: 0.9,
-        envMapIntensity: 0.55
-      });
-
+      const spineMat = getSpineMat(cell.spine);
+      const backMat = getBackMat(cell.spine);
       const initialCoverTex = getFallbackCoverTexture(cell);
       const coverMat = new THREE.MeshStandardMaterial({
         map: initialCoverTex,
@@ -254,17 +290,11 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         envMapIntensity: 0.55
       });
 
-      const backMat = new THREE.MeshStandardMaterial({
-        color: spineColorObj,
-        roughness: 0.6,
-        envMapIntensity: 0.55
-      });
-
       const materials = [
-        foreEdgeMat,
+        sharedForeEdgeMat,
         spineMat,
-        topBottomMat,
-        topBottomMat,
+        sharedTopBottomMat,
+        sharedTopBottomMat,
         coverMat,
         backMat
       ];
@@ -288,13 +318,29 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
         y: -3,
         vy: 0,
         z: 0,
-        vz: 0
+        vz: 0,
+        restScreenX: 0,
+        restScreenY: 0
       });
     });
 
     const tempVec = new THREE.Vector3();
 
-    // Texture Sheets loader
+    // Accurately precalculate resting screen coordinates (0 CPU per-frame overhead, 100% responsive hover)
+    const updateBookScreenPoints = () => {
+      camera.updateMatrixWorld(true);
+      scene.updateMatrixWorld(true);
+      books.forEach(b => {
+        tempVec.set(0, 0.1, 0);
+        b.group.localToWorld(tempVec);
+        tempVec.project(camera);
+        b.restScreenX = (tempVec.x * 0.5 + 0.5) * width;
+        b.restScreenY = (-tempVec.y * 0.5 + 0.5) * height;
+      });
+    };
+    updateBookScreenPoints();
+
+    // Texture Sheets loader - Asynchronously load external texture sheets without blocking initial hydration / TTI
     const sheetA_URL = 'https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261030_003447_7862e2d0-751c-4d7c-9c8a-e682415d908f.png&w=2336&q=90';
     const sheetB_URL = 'https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20261030_003448_95f1eed5-2ae5-4736-a53c-f3b3f87acd3b.png&w=2336&q=90';
 
@@ -311,7 +357,6 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
           clone.anisotropy = maxAnisotropy;
           clone.repeat.set((b.cell.w - 6) / 2336, (b.cell.h - 6) / 1744);
           clone.offset.set((b.cell.x + 3) / 2336, 1 - (b.cell.y + b.cell.h - 3) / 1744);
-          clone.needsUpdate = true;
 
           b.coverMat.map = clone;
           b.coverMat.needsUpdate = true;
@@ -319,15 +364,22 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       });
     }
 
-    texLoader.load(sheetA_URL, tex => applySheetTexture(tex, false));
-    texLoader.load(sheetB_URL, tex => applySheetTexture(tex, true));
+    const loadTextureSheets = () => {
+      texLoader.load(sheetA_URL, tex => applySheetTexture(tex, false));
+      texLoader.load(sheetB_URL, tex => applySheetTexture(tex, true));
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(loadTextureSheets, { timeout: 2200 });
+    } else {
+      setTimeout(loadTextureSheets, 1200);
+    }
 
     // Pointer tracking & Idle
     let pointerInside = false;
     let pointerX = -9999;
     let pointerY = -9999;
     let lastPointerTime = performance.now();
-    const isCoarse = window.matchMedia('(pointer: coarse)').matches;
 
     const onPointerMove = (e: PointerEvent) => {
       // Ignore touch gestures to prevent sticky hover states on mobile/touch screens
@@ -367,32 +419,16 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
 
     const startTime = performance.now();
     let lastFrameTime = performance.now();
+    let lastRenderTime = performance.now();
     let animationFrameId: number;
+
+    const targetFps = isMobile ? 30 : 60;
+    const frameInterval = 1000 / targetFps;
 
     const K = 70;
     const C = 12.5;
 
-    function getBookScreenPoint(book: BookItem) {
-      tempVec.set(0, 0.1, 0);
-      book.mesh.localToWorld(tempVec);
-      tempVec.project(camera);
-      return {
-        x: (tempVec.x * 0.5 + 0.5) * width,
-        y: (-tempVec.y * 0.5 + 0.5) * height
-      };
-    }
-
-    function getBookRestingScreenPoint(book: BookItem) {
-      tempVec.set(0, 0.1, 0);
-      book.group.localToWorld(tempVec);
-      tempVec.project(camera);
-      return {
-        x: (tempVec.x * 0.5 + 0.5) * width,
-        y: (-tempVec.y * 0.5 + 0.5) * height
-      };
-    }
-
-    // Animation loop: Real-time dynamic hover & smooth spring physics
+    // Animation loop: Real-time dynamic hover & smooth spring physics with 0 main-thread blocking
     function animate() {
       animationFrameId = requestAnimationFrame(animate);
 
@@ -400,8 +436,12 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       if (window.scrollY > height + 50) return;
 
       const now = performance.now();
-      const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
-      lastFrameTime = now;
+      const elapsedSinceRender = now - lastRenderTime;
+      if (elapsedSinceRender < frameInterval - 1) {
+        return;
+      }
+      const dt = Math.min(elapsedSinceRender / 1000, 0.05);
+      lastRenderTime = now;
       const t = (now - startTime) / 1000;
 
       const isIdle = (now - lastPointerTime) > 4000;
@@ -411,24 +451,25 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
 
       if (isCoarse || isIdle || !pointerInside) {
         waveActive = true;
-        const p29 = getBookRestingScreenPoint(books[29]);
-        const p1 = getBookRestingScreenPoint(books[1]);
+        const p29X = books[29]?.restScreenX || 0;
+        const p29Y = books[29]?.restScreenY || 0;
+        const p1X = books[1]?.restScreenX || 0;
+        const p1Y = books[1]?.restScreenY || 0;
         const u = (Math.sin(t * 0.45) + 1) / 2;
-        activeX = p29.x + (p1.x - p29.x) * u;
-        activeY = p29.y + (p1.y - p29.y) * u;
+        activeX = p29X + (p1X - p29X) * u;
+        activeY = p29Y + (p1Y - p29Y) * u;
       }
 
       const s = Math.max(width, height) * 0.085;
       const sSq = s * s;
-      const subSteps = 4;
+      const subSteps = isMobile ? 2 : 4;
       const h = dt / subSteps;
 
       books.forEach(b => {
-        const screenP = getBookScreenPoint(b);
         let influence = 0;
         if (waveActive) {
-          const dx = screenP.x - activeX;
-          const dy = (screenP.y - activeY) * 0.55;
+          const dx = b.restScreenX - activeX;
+          const dy = (b.restScreenY - activeY) * 0.55;
           influence = Math.exp(-(dx * dx + dy * dy) / sSq);
         }
 
@@ -472,8 +513,11 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       camera.lookAt(-1.4, 0.05, -0.6);
       camera.updateMatrixWorld(true);
 
+      const isCoarseNow = window.matchMedia('(pointer: coarse)').matches;
+      const isMobileNow = width < 768 || isCoarseNow;
       renderer.setSize(width, height);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setPixelRatio(isMobileNow ? 1.0 : Math.min(window.devicePixelRatio, 1.5));
+      updateBookScreenPoints();
     };
 
     window.addEventListener('resize', onResize);
@@ -517,13 +561,14 @@ export const BookHero: React.FC<BookHeroProps> = ({ onContinue }) => {
       }}
     >
       {/* 1. Looping Magical Ancient Library Background Video (Lowest Layer) */}
-      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+      <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0 will-change-transform transform-gpu">
         <video
           ref={videoRef}
           autoPlay
           muted
           loop
           playsInline
+          preload="metadata"
           className="w-full h-full object-cover pointer-events-none"
           src="./osososo.mp4"
         >

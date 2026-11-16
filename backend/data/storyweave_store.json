@@ -7,7 +7,7 @@
       "chapter_number": 1,
       "order": null,
       "title": "Chapter 1 - The Unfolding Incident",
-      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa...</p><p><br></p><p><br></p><p>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.<br>The salt-gray fog creeps off the deep,<br>where Ravenscar cliffs their vigil keep.<br>A bitter cup of dark cacao,<br>grown cold upon the mahogany bough,<br>while midnight tides begin to beat<br>against the stones beneath my feet.</p><p>The ledger lies, the ink is dry,<br>beneath a choked and leaden sky.<br>What pact was signed in brine and bone?<br>What secret locked within the stone?<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p><p>The lantern gutters, shadows lean<br>across the floorboards, damp and green.<br>No footprint mars the muddy lane,<br>only the lash of autumn rain.<br>I trace the cipher in the glass,<br>and watch the phantom moments pass.<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p>",
       "summary": "",
       "status": "draft",
       "pages": [
@@ -15,16 +15,16 @@
           "id": "page_chap_39dd66a014_1",
           "chapter_id": "chap_39dd66a014",
           "page_number": 1,
-          "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+          "content": "<p>diyana mujhe bana do na dewana pan meri hai naa...</p><p><br></p><p><br></p><p>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.<br>The salt-gray fog creeps off the deep,<br>where Ravenscar cliffs their vigil keep.<br>A bitter cup of dark cacao,<br>grown cold upon the mahogany bough,<br>while midnight tides begin to beat<br>against the stones beneath my feet.</p><p>The ledger lies, the ink is dry,<br>beneath a choked and leaden sky.<br>What pact was signed in brine and bone?<br>What secret locked within the stone?<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p><p>The lantern gutters, shadows lean<br>across the floorboards, damp and green.<br>No footprint mars the muddy lane,<br>only the lash of autumn rain.<br>I trace the cipher in the glass,<br>and watch the phantom moments pass.<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p>",
+          "word_count": 140,
           "save_status": "saved",
-          "word_count": 10,
-          "updated_at": "2026-11-15T18:07:58.731761",
-          "created_at": "2026-11-15T18:05:21.694471"
+          "created_at": "2026-11-15T18:05:21.694471",
+          "updated_at": "2026-11-16T07:39:15.529841"
         }
       ],
       "id": "chap_39dd66a014",
-      "word_count": 10,
-      "updated_at": "2026-11-15T18:07:59.090728"
+      "word_count": 118,
+      "updated_at": "2026-11-16T07:39:15.793343"
     },
     "chap_fd1bdd97c6": {
       "story_id": "story_4300846ac6",
@@ -46,11 +46,11 @@
       "id": "page_chap_39dd66a014_1",
       "chapter_id": "chap_39dd66a014",
       "page_number": 1,
-      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa</p>",
+      "content": "<p>diyana mujhe bana do na dewana pan meri hai naa...</p><p><br></p><p><br></p><p>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.<br>The salt-gray fog creeps off the deep,<br>where Ravenscar cliffs their vigil keep.<br>A bitter cup of dark cacao,<br>grown cold upon the mahogany bough,<br>while midnight tides begin to beat<br>against the stones beneath my feet.</p><p>The ledger lies, the ink is dry,<br>beneath a choked and leaden sky.<br>What pact was signed in brine and bone?<br>What secret locked within the stone?<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p><p>The lantern gutters, shadows lean<br>across the floorboards, damp and green.<br>No footprint mars the muddy lane,<br>only the lash of autumn rain.<br>I trace the cipher in the glass,<br>and watch the phantom moments pass.<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p>",
+      "word_count": 140,
       "save_status": "saved",
-      "word_count": 10,
-      "updated_at": "2026-11-15T18:07:58.731761",
-      "created_at": "2026-11-15T18:05:21.694471"
+      "created_at": "2026-11-15T18:05:21.694471",
+      "updated_at": "2026-11-16T07:39:15.529841"
     }
   },
   "characters": {},

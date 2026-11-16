@@ -345,13 +345,14 @@ const MainContent: React.FC = () => {
   return (
     <div className="min-h-screen bg-[#11100F] text-[#E0D7C7] flex flex-col font-sans selection:bg-[#C49A61]/30 selection:text-white w-full max-w-full overflow-x-hidden">
       {/* Full-Page Looping Background Video behind StoryWeave AI Dashboard */}
-      <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+      <div className="fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0 will-change-transform transform-gpu">
         <video
           ref={videoRef}
           autoPlay
           muted
           loop
           playsInline
+          preload="metadata"
           className="w-full h-full object-cover"
           src="./homevideo.mp4"
         >
