@@ -1,15 +1,65 @@
 {
-  "stories": {},
+  "stories": {
+    "story_f3e01181e7": {
+      "title": "The Dead Humour",
+      "description": "A private inquiry agent is summoned to an isolated coastal estate following an impossible disappearance. Strange maritime ciphers and subterranean tide vaults indicate a clandestine pact between the town founders.",
+      "genre": "Romance",
+      "subgenre": "Victorian Gothic Noir",
+      "theme": "The cost of forbidden truth & generational guilt",
+      "mood": "Heartwarming",
+      "setting": "Ravenscar Cliffside & Maritime Manor",
+      "time_period": "Autumn, 1894",
+      "character_count": 4,
+      "writing_style": "Cinematic, sensory Victorian prose with noir grit",
+      "chapter_count": 6,
+      "ending_type": "Twist Revelation",
+      "plot_outline": [
+        {
+          "chapter": 1,
+          "title": "An Unscheduled Encounter",
+          "focus": "Two estranged lives intersect unexpectedly during a turbulent evening."
+        },
+        {
+          "chapter": 2,
+          "title": "Unspoken Letters",
+          "focus": "Discovered keepsakes reopen old questions about why their paths parted years ago."
+        },
+        {
+          "chapter": 3,
+          "title": "Under the Lamplight",
+          "focus": "A forced collaboration uncovers shared vulnerabilities and rekindles unspoken devotion."
+        },
+        {
+          "chapter": 4,
+          "title": "The Shadow of the Past",
+          "focus": "External obligations and misjudged intentions threaten to shatter their fragile trust."
+        },
+        {
+          "chapter": 5,
+          "title": "The Rain-Soaked Promenade",
+          "focus": "A heartfelt confrontation where pride gives way to an honest confession of truth."
+        },
+        {
+          "chapter": 6,
+          "title": "Two Names on the Ledger",
+          "focus": "Choosing a shared future despite past scars, bound by an enduring promise."
+        }
+      ],
+      "cover_url": "",
+      "user_id": "4YFWAWp4OpgNgzoPd3ZE2WPkmHf2",
+      "id": "story_f3e01181e7"
+    }
+  },
   "chapters": {
     "chap_39dd66a014": {
       "story_id": "story_4300846ac6",
       "storyId": null,
       "chapter_number": 1,
       "order": null,
-      "title": "Chapter 1 - The Unfolding Incident",
+      "title": "Chocolate",
       "content": "<p>diyana mujhe bana do na dewana pan meri hai naa...</p><p><br></p><p><br></p><p>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.<br>The salt-gray fog creeps off the deep,<br>where Ravenscar cliffs their vigil keep.<br>A bitter cup of dark cacao,<br>grown cold upon the mahogany bough,<br>while midnight tides begin to beat<br>against the stones beneath my feet.</p><p>The ledger lies, the ink is dry,<br>beneath a choked and leaden sky.<br>What pact was signed in brine and bone?<br>What secret locked within the stone?<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p><p>The lantern gutters, shadows lean<br>across the floorboards, damp and green.<br>No footprint mars the muddy lane,<br>only the lash of autumn rain.<br>I trace the cipher in the glass,<br>and watch the phantom moments pass.<br>Diyana, mujhe bana do na,<br>diwana pan meri hai naa.</p>",
       "summary": "",
-      "status": "draft",
+      "status": "completed",
       "pages": [
         {
           "id": "page_chap_39dd66a014_1",
@@ -19,26 +69,76 @@
           "word_count": 140,
           "save_status": "saved",
           "created_at": "2026-11-15T18:05:21.694471",
-          "updated_at": "2026-11-16T07:39:15.529841"
+          "updated_at": "2026-11-16T12:55:44.346Z"
         }
       ],
       "id": "chap_39dd66a014",
       "word_count": 118,
-      "updated_at": "2026-11-16T07:39:15.793343"
+      "updated_at": "2026-11-16T12:55:44.533310"
     },
     "chap_fd1bdd97c6": {
       "story_id": "story_4300846ac6",
       "storyId": null,
       "chapter_number": 1,
       "order": null,
-      "title": "Chapter 1 - The Unfolding Incident",
-      "content": "",
+      "title": "Dairymilk",
+      "content": "<p>The salt-rimed ledger lies open upon the mahogany desk, its pages stiffened by the persistent maritime damp of Ravenscar Manor. Beside the binding sits a heavy, brass-bound crate bearing the embossed seal of the Cadbury Dairy Milk Company—a strange, incongruous import of rich Birmingham comfort smuggled into this grim, wave-lashed cliffside prison of 1894. I pry the lid away with a pocket knife, the wood groaning against the vacuum of the coastal chill. Inside, wrapped in thick purple foil that defies the gray rot of the estate, rest unbroken blocks of milk chocolate, smelling faintly of churned Gloucestershire cream and refined sugar—a stark contrast to the bitter, medicinal dark cacao that had poisoned the missing soul's final hours. </p><p>The flickering gaslamp throws long, skeletal shadows across the rows of sweet confections. Why would a man hunted by generational guilt and subterranean ciphers hoard crates of commercial milk chocolate shipped straight from the Midlands? I lift a heavy square of the pale, velvety brown substance. It feels too innocent for Ravenscar, too smooth for a coast built on secrets, brine, and bone. Yet, etched lightly into the inner lining of the purple wrapper with a blunt instrument is a sequence of numbers—coordinates, perhaps, pointing toward the tide vaults beneath the crags. The dairy company's sweet industrial promise is merely a vessel for something far more calculated, wrapping the bitter truth of the town's founding sins in a familiar, comforting foil.</p>",
       "summary": "",
+      "status": "completed",
+      "pages": [
+        {
+          "id": "page_chap_fd1bdd97c6_1",
+          "chapter_id": "chap_fd1bdd97c6",
+          "page_number": 1,
+          "content": "<p>The salt-rimed ledger lies open upon the mahogany desk, its pages stiffened by the persistent maritime damp of Ravenscar Manor. Beside the binding sits a heavy, brass-bound crate bearing the embossed seal of the Cadbury Dairy Milk Company—a strange, incongruous import of rich Birmingham comfort smuggled into this grim, wave-lashed cliffside prison of 1894. I pry the lid away with a pocket knife, the wood groaning against the vacuum of the coastal chill. Inside, wrapped in thick purple foil that defies the gray rot of the estate, rest unbroken blocks of milk chocolate, smelling faintly of churned Gloucestershire cream and refined sugar—a stark contrast to the bitter, medicinal dark cacao that had poisoned the missing soul's final hours. </p><p>The flickering gaslamp throws long, skeletal shadows across the rows of sweet confections. Why would a man hunted by generational guilt and subterranean ciphers hoard crates of commercial milk chocolate shipped straight from the Midlands? I lift a heavy square of the pale, velvety brown substance. It feels too innocent for Ravenscar, too smooth for a coast built on secrets, brine, and bone. Yet, etched lightly into the inner lining of the purple wrapper with a blunt instrument is a sequence of numbers—coordinates, perhaps, pointing toward the tide vaults beneath the crags. The dairy company's sweet industrial promise is merely a vessel for something far more calculated, wrapping the bitter truth of the town's founding sins in a familiar, comforting foil.</p>",
+          "word_count": 239,
+          "save_status": "saved",
+          "created_at": "2026-11-16T12:55:10.919129",
+          "updated_at": "2026-11-16T12:57:39.947Z"
+        }
+      ],
+      "id": "chap_fd1bdd97c6",
+      "word_count": 239,
+      "updated_at": "2026-11-16T12:57:40.134369"
+    },
+    "chap_76152a405f": {
+      "story_id": "story_4300846ac6",
+      "storyId": null,
+      "chapter_number": 1,
+      "order": null,
+      "title": "Kitkat",
+      "content": "<br><p><br></p><p>The salt-gray gale shrieked against the reinforced panes of Ravenscar Manor, rattling the iron casements as if demanding admittance to the frigid study. Choco stood alone in the sepulchral stillness, the flickering yellow glare of the gaslamp casting long, trembling silhouettes across the damp wallpaper. The heavy mahogany desk remained the focal point of the oppressive room, anchored by the open, brine-stained ledger and the strange, incongruous cargo recently uncovered.</p><p>With slow, deliberate movements, Choco turned full attention back to the purple foil wrappers resting inside the brass-bound Cadbury crate. The sheer absurdity of it—factory-stamped confections of smooth, comforting milk chocolate amidst the rotting timbers and generational curses of a cliffside prison—clung to the air like a bitter paradox. Yet, the etched numbers on the inner lining pulsed with silent urgency under the lamplight. </p><p>Choco reached down, gloved fingers tracing the cold indentation of the cipher once more. The coordinates pointed downward, deeper into the suffocating architecture of the coastal estate, toward the subterranean tide vaults where the town founders had forged their unspeakable pacts. The sweet promise of the Midlands held a darker architecture beneath its velvet surface. Taking up the heavy block of chocolate—the literal and figurative kitkat of the hidden puzzle—Choco prepared to descend into the damp abyss, where the tide waited to swallow whatever secrets remained buried in the dark.</p>",
+      "summary": "The private inquiry agent arrives at the isolated coastal estate during a fierce storm, discovering the study empty with a half-melted cup of dark chocolate on the desk and no footprints in the mud outside.",
+      "status": "completed",
+      "pages": [
+        {
+          "id": "page_chap_76152a405f_1",
+          "chapter_id": "chap_76152a405f",
+          "page_number": 1,
+          "content": "<br><p><br></p><p>The salt-gray gale shrieked against the reinforced panes of Ravenscar Manor, rattling the iron casements as if demanding admittance to the frigid study. Choco stood alone in the sepulchral stillness, the flickering yellow glare of the gaslamp casting long, trembling silhouettes across the damp wallpaper. The heavy mahogany desk remained the focal point of the oppressive room, anchored by the open, brine-stained ledger and the strange, incongruous cargo recently uncovered.</p><p>With slow, deliberate movements, Choco turned full attention back to the purple foil wrappers resting inside the brass-bound Cadbury crate. The sheer absurdity of it—factory-stamped confections of smooth, comforting milk chocolate amidst the rotting timbers and generational curses of a cliffside prison—clung to the air like a bitter paradox. Yet, the etched numbers on the inner lining pulsed with silent urgency under the lamplight. </p><p>Choco reached down, gloved fingers tracing the cold indentation of the cipher once more. The coordinates pointed downward, deeper into the suffocating architecture of the coastal estate, toward the subterranean tide vaults where the town founders had forged their unspeakable pacts. The sweet promise of the Midlands held a darker architecture beneath its velvet surface. Taking up the heavy block of chocolate—the literal and figurative kitkat of the hidden puzzle—Choco prepared to descend into the damp abyss, where the tide waited to swallow whatever secrets remained buried in the dark.</p>",
+          "word_count": 224,
+          "save_status": "saved",
+          "created_at": "2026-11-15T12:54:14.033977",
+          "updated_at": "2026-11-16T13:00:33.553Z"
+        }
+      ],
+      "id": "chap_76152a405f",
+      "word_count": 223,
+      "updated_at": "2026-11-16T13:00:39.920787"
+    },
+    "chap_f98231478c": {
+      "story_id": "story_f3e01181e7",
+      "storyId": null,
+      "chapter_number": 1,
+      "order": null,
+      "title": "An Unscheduled Encounter",
+      "content": "The story of The Dead Humour commences in Ravenscar Cliffside & Maritime Manor during Autumn, 1894.\n\n",
+      "summary": "Two estranged lives intersect unexpectedly during a turbulent evening.",
       "status": "draft",
       "pages": null,
-      "id": "chap_fd1bdd97c6",
-      "word_count": 0,
-      "updated_at": "2026-11-15T18:05:17.439317"
+      "id": "chap_f98231478c",
+      "word_count": 16,
+      "updated_at": "2026-11-16T13:01:46.700886"
     }
   },
   "pages": {
@@ -50,10 +150,90 @@
       "word_count": 140,
       "save_status": "saved",
       "created_at": "2026-11-15T18:05:21.694471",
-      "updated_at": "2026-11-16T07:39:15.529841"
+      "updated_at": "2026-11-16T12:55:44.470810"
+    },
+    "page_chap_e7309fdaab_1": {
+      "id": "page_chap_e7309fdaab_1",
+      "chapter_id": "chap_e7309fdaab",
+      "page_number": 1,
+      "content": "<p>New page content synced</p>",
+      "save_status": "saved",
+      "word_count": 4,
+      "updated_at": "2026-11-16T12:47:19.861238",
+      "created_at": "2026-11-16T12:47:19.861238"
+    },
+    "page_chap_fd1bdd97c6_1": {
+      "id": "page_chap_fd1bdd97c6_1",
+      "chapter_id": "chap_fd1bdd97c6",
+      "page_number": 1,
+      "content": "<p>The salt-rimed ledger lies open upon the mahogany desk, its pages stiffened by the persistent maritime damp of Ravenscar Manor. Beside the binding sits a heavy, brass-bound crate bearing the embossed seal of the Cadbury Dairy Milk Company—a strange, incongruous import of rich Birmingham comfort smuggled into this grim, wave-lashed cliffside prison of 1894. I pry the lid away with a pocket knife, the wood groaning against the vacuum of the coastal chill. Inside, wrapped in thick purple foil that defies the gray rot of the estate, rest unbroken blocks of milk chocolate, smelling faintly of churned Gloucestershire cream and refined sugar—a stark contrast to the bitter, medicinal dark cacao that had poisoned the missing soul's final hours. </p><p>The flickering gaslamp throws long, skeletal shadows across the rows of sweet confections. Why would a man hunted by generational guilt and subterranean ciphers hoard crates of commercial milk chocolate shipped straight from the Midlands? I lift a heavy square of the pale, velvety brown substance. It feels too innocent for Ravenscar, too smooth for a coast built on secrets, brine, and bone. Yet, etched lightly into the inner lining of the purple wrapper with a blunt instrument is a sequence of numbers—coordinates, perhaps, pointing toward the tide vaults beneath the crags. The dairy company's sweet industrial promise is merely a vessel for something far more calculated, wrapping the bitter truth of the town's founding sins in a familiar, comforting foil.</p>",
+      "word_count": 239,
+      "save_status": "saved",
+      "created_at": "2026-11-16T12:55:10.919129",
+      "updated_at": "2026-11-16T12:57:40.065608"
+    },
+    "page_chap_76152a405f_1": {
+      "id": "page_chap_76152a405f_1",
+      "chapter_id": "chap_76152a405f",
+      "page_number": 1,
+      "content": "<br><p><br></p><p>The salt-gray gale shrieked against the reinforced panes of Ravenscar Manor, rattling the iron casements as if demanding admittance to the frigid study. Choco stood alone in the sepulchral stillness, the flickering yellow glare of the gaslamp casting long, trembling silhouettes across the damp wallpaper. The heavy mahogany desk remained the focal point of the oppressive room, anchored by the open, brine-stained ledger and the strange, incongruous cargo recently uncovered.</p><p>With slow, deliberate movements, Choco turned full attention back to the purple foil wrappers resting inside the brass-bound Cadbury crate. The sheer absurdity of it—factory-stamped confections of smooth, comforting milk chocolate amidst the rotting timbers and generational curses of a cliffside prison—clung to the air like a bitter paradox. Yet, the etched numbers on the inner lining pulsed with silent urgency under the lamplight. </p><p>Choco reached down, gloved fingers tracing the cold indentation of the cipher once more. The coordinates pointed downward, deeper into the suffocating architecture of the coastal estate, toward the subterranean tide vaults where the town founders had forged their unspeakable pacts. The sweet promise of the Midlands held a darker architecture beneath its velvet surface. Taking up the heavy block of chocolate—the literal and figurative kitkat of the hidden puzzle—Choco prepared to descend into the damp abyss, where the tide waited to swallow whatever secrets remained buried in the dark.</p>",
+      "word_count": 224,
+      "save_status": "saved",
+      "created_at": "2026-11-15T12:54:14.033977",
+      "updated_at": "2026-11-16T13:00:39.793540"
+    },
+    "page_chap_f98231478c_1": {
+      "id": "page_chap_f98231478c_1",
+      "chapter_id": "chap_f98231478c",
+      "page_number": 1,
+      "content": "The story of The Dead Humour commences in Ravenscar Cliffside & Maritime Manor during Autumn, 1894.\n\n",
+      "word_count": 16,
+      "save_status": "saved",
+      "created_at": "2026-11-16T13:01:54.242498",
+      "updated_at": "2026-11-16T13:01:54.322215"
     }
   },
-  "characters": {},
+  "characters": {
+    "char_6c4b1108a9": {
+      "id": "char_6c4b1108a9",
+      "story_id": "story_4300846ac6",
+      "name": "Choco",
+      "alias": "",
+      "aliases": [],
+      "age": "",
+      "role": "Protagonist",
+      "personality_traits": [
+        "Unknown"
+      ],
+      "physical_description": "Not specified in the text.",
+      "backstory": "The story of choco commences in Ravenscar Cliffside & Maritime Manor during Autumn, 1894.",
+      "motivations": "Not specified in the text.",
+      "goals": "",
+      "fears": "",
+      "secrets": "",
+      "current_status": "Alive",
+      "status_history": [
+        {
+          "status": "Alive",
+          "chapter": 1,
+          "evidence": "Introduced in Chapter 1: The story of choco commences in Ravenscar Cliffside & Maritime Manor during Autumn, 1894.",
+          "type": "explicit"
+        }
+      ],
+      "first_appearance": "Chapter 1",
+      "last_appearance": "Chapter 1",
+      "relationships": [],
+      "evidence": [
+        {
+          "chapter": 1,
+          "text": "The story of choco commences in Ravenscar Cliffside & Maritime Manor during Autumn, 1894."
+        }
+      ],
+      "investigation_status": "unclassified",
+      "confidence": 1.0,
+      "updated_at": "2026-11-16T12:58:03.127549"
+    }
+  },
   "events": {},
   "memories": {},
   "plotholes": {},

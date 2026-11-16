@@ -97,6 +97,7 @@ export const WritingStudio: React.FC = () => {
   summaryRef.current = summary;
   const statusRef = useRef<Chapter['status']>(status);
   statusRef.current = status;
+  const saveSequenceRef = useRef<number>(0);
 
   // Unmount cleanup hook: seamlessly persist active folio & chapter before leaving the page
   useEffect(() => {
@@ -229,7 +230,7 @@ export const WritingStudio: React.FC = () => {
           }
           // Immediately sync recovered richer draft to backend so server stays updated forever
           api.updateChapter(chap.id, {
-            title: draft.title || chap.title,
+            title: chap.title || draft.title,
             content: draft.content,
             summary: draft.summary || chap.summary,
             status: draft.status || chap.status || 'draft',
@@ -347,14 +348,18 @@ export const WritingStudio: React.FC = () => {
   }, [activeStory]);
 
   const selectChapter = async (chap: Chapter) => {
-    flushCurrentPage();
+    flushCurrentPage(false);
     sound.playPaperRustle();
     setSelectedChapter(chap);
+    selectedChapterRef.current = chap;
     setActiveChapterId(chap.id);
     setTitle(chap.title);
+    titleRef.current = chap.title;
     setContent(chap.content);
     setSummary(chap.summary || '');
+    summaryRef.current = chap.summary || '';
     setStatus(chap.status);
+    statusRef.current = chap.status;
     setLastSaved('Saved');
     queryContextMemories(stripHtml(chap.content));
 
@@ -407,7 +412,7 @@ export const WritingStudio: React.FC = () => {
   };
 
   // Synchronous flush of current page content before navigation or save
-  const flushCurrentPage = () => {
+  const flushCurrentPage = (saveToServer: boolean = true) => {
     const activePage = pagesRef.current[currentPageRef.current - 1];
     if (!activePage) return;
 
@@ -462,7 +467,9 @@ export const WritingStudio: React.FC = () => {
       return next;
     });
 
-    saveSpecificPage(activePage.id, currentHtml, version);
+    if (saveToServer) {
+      saveSpecificPage(activePage.id, currentHtml, version);
+    }
   };
 
   // Page input handler for ContentEditable
@@ -646,13 +653,14 @@ export const WritingStudio: React.FC = () => {
 
   const handleSave = async (
     textToSave?: string,
-    titleToSave: string = title,
+    titleToSave?: string,
     summaryToSave: string = summary,
     statusToSave: any = status,
     showToast: boolean = true
   ) => {
     if (!selectedChapter) return;
-    flushCurrentPage();
+    const saveSeq = ++saveSequenceRef.current;
+    flushCurrentPage(false);
 
     try {
       setIsSaving(true);
@@ -672,10 +680,20 @@ export const WritingStudio: React.FC = () => {
 
       setContent(fullContent);
 
+      const resolvedTitle = (
+        (titleToSave !== undefined && titleToSave !== null && titleToSave.trim() !== '')
+          ? titleToSave.trim()
+          : (titleRef.current?.trim() || title?.trim() || selectedChapter.title || '')
+      );
+      const finalTitle = resolvedTitle || selectedChapter.title || `Chapter ${selectedChapter.chapter_number}`;
+
+      setTitle(finalTitle);
+      titleRef.current = finalTitle;
+
       const draftPayload = {
         content: fullContent,
         pages: pagesToSave,
-        title: titleToSave,
+        title: finalTitle,
         summary: summaryToSave,
         status: statusToSave,
         timestamp: Date.now()
@@ -687,44 +705,46 @@ export const WritingStudio: React.FC = () => {
       } catch {}
 
       const updated = await api.updateChapter(selectedChapter.id, {
-        title: titleToSave,
+        title: finalTitle,
         content: fullContent,
         summary: summaryToSave,
         status: statusToSave,
         pages: pagesToSave
       });
 
-      const activePage = pagesRef.current[currentPageRef.current - 1];
-      if (activePage) {
-        await api.updateChapterPage(selectedChapter.id, activePage.id, {
-          content: pageContentCacheRef.current[activePage.id] ?? activePage.content,
-          page_number: activePage.page_number,
-          save_status: 'saved'
-        }).catch(console.error);
+      // Stale response guard: Never overwrite newer user edits with an older response
+      if (saveSeq < saveSequenceRef.current) {
+        return;
       }
 
       setSelectedChapter(updated);
+      selectedChapterRef.current = updated;
+      setTitle(updated.title);
+      titleRef.current = updated.title;
       setChapters(prev => prev.map(c => c.id === updated.id ? updated : c));
       setLastSaved(`Saved at ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
       if (showToast) {
         sound.playTypewriterKeystroke();
-        addToast("Draft Saved Permanently", `"${titleToSave}" is securely saved and will stay forever in your archive.`, "success");
+        addToast("Draft Saved Permanently", `"${finalTitle}" is securely saved and will stay forever in your archive.`, "success");
       }
     } catch (e: any) {
       setLastSaved('Save Error');
       if (showToast) addToast("Save Failed", e.message, "error");
     } finally {
-      setIsSaving(false);
+      if (saveSeq === saveSequenceRef.current) {
+        setIsSaving(false);
+      }
     }
   };
 
   const handleCreateChapter = async () => {
     if (!activeStory) return;
     try {
-      const nextNum = chapters.length + 1;
+      const nextNum = chapters.length > 0 ? Math.max(...chapters.map(c => c.chapter_number || 0)) + 1 : 1;
+      const initialTitle = `Chapter ${nextNum} - The Unfolding Incident`;
       const created = await api.createChapter(activeStory.id, {
         chapter_number: nextNum,
-        title: `Chapter ${nextNum} - The Unfolding Incident`,
+        title: initialTitle,
         content: '',
         status: 'draft',
       });
@@ -843,7 +863,8 @@ export const WritingStudio: React.FC = () => {
             onChange={(e) => {
               const newStatus = e.target.value as any;
               setStatus(newStatus);
-              handleSave(undefined, title, summary, newStatus, true);
+              statusRef.current = newStatus;
+              handleSave(undefined, titleRef.current || title, summary, newStatus, true);
             }}
             className="bg-[#241D17] border border-[#3E3226] text-[#E0B77D] font-sans text-xs sm:text-sm font-semibold rounded-lg px-3 py-2 h-10 focus:outline-none focus:border-[#C49A61]/60 shadow-sm"
           >
@@ -853,7 +874,7 @@ export const WritingStudio: React.FC = () => {
           </select>
 
           <button
-            onClick={() => handleSave(undefined, title, summary, status, true)}
+            onClick={() => handleSave(undefined, titleRef.current || title, summary, status, true)}
             disabled={isSaving}
             className="flex items-center space-x-2 px-4 py-2 h-10 rounded-lg bg-[#C49A61] hover:bg-[#D6AB72] text-[#14100D] font-sans text-xs sm:text-sm font-bold uppercase tracking-wider shadow-md transition-all shrink-0"
           >
@@ -1046,7 +1067,9 @@ export const WritingStudio: React.FC = () => {
                     type="text"
                     value={title}
                     onChange={(e) => {
-                      setTitle(e.target.value);
+                      const val = e.target.value;
+                      titleRef.current = val;
+                      setTitle(val);
                       setLastSaved('Unsaved Changes...');
                     }}
                     placeholder="Chapter Title..."

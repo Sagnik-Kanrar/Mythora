@@ -181,7 +181,7 @@ class DatabaseService:
             except Exception as e:
                 print(f"[DB Mongo get_chapters error] {e}")
         chaps = list(chaps_map.values())
-        return sorted(chaps, key=lambda x: x.get("chapter_number", 0))
+        return sorted(chaps, key=lambda x: (x.get("chapter_number", 0), x.get("created_at", "")))
 
     def get_chapter(self, chapter_id: str) -> Optional[Dict[str, Any]]:
         doc = None
@@ -201,9 +201,13 @@ class DatabaseService:
         return doc or local_c
 
     def save_chapter(self, chapter: Dict[str, Any]) -> Dict[str, Any]:
-        cid = chapter.get("id")
-        if cid:
-            existing = self.get_chapter(cid)
+        with lock:
+            cid = chapter.get("id")
+            data = self._load_local()
+            if "chapters" not in data:
+                data["chapters"] = {}
+
+            existing = data["chapters"].get(cid)
             if existing:
                 existing_c = (existing.get("content") or "").strip()
                 incoming_c = (chapter.get("content") or "").strip()
@@ -211,23 +215,33 @@ class DatabaseService:
                 if (incoming_c == "" or incoming_c == "<p><br></p>") and (existing_c != "" and existing_c != "<p><br></p>"):
                     chapter["content"] = existing.get("content")
 
-        chapter["word_count"] = len(chapter.get("content", "").split())
-        chapter["updated_at"] = datetime.utcnow().isoformat()
-        
-        # Dual-write: Always update local
-        data = self._load_local()
-        if "chapters" not in data:
-            data["chapters"] = {}
-        data["chapters"][chapter["id"]] = chapter
-        self._save_local(data)
-        
-        # Dual-write: Always update Mongo
-        if self.use_mongo:
-            try:
-                self.db.chapters.replace_one({"id": chapter["id"]}, chapter, upsert=True)
-            except Exception as e:
-                print(f"[DB Mongo save_chapter error] {e}")
-        return chapter
+                # Title protection: never allow empty/blank title to overwrite existing title
+                incoming_t = (chapter.get("title") or "").strip()
+                existing_t = (existing.get("title") or "").strip()
+                if not incoming_t and existing_t:
+                    chapter["title"] = existing.get("title")
+                elif incoming_t:
+                    chapter["title"] = incoming_t
+                elif not existing_t:
+                    chapter["title"] = f"Chapter {existing.get('chapter_number', 1)}"
+            else:
+                incoming_t = (chapter.get("title") or "").strip()
+                chapter["title"] = incoming_t or f"Chapter {chapter.get('chapter_number', 1)}"
+
+            chapter["word_count"] = len(chapter.get("content", "").split())
+            chapter["updated_at"] = datetime.utcnow().isoformat()
+            
+            # Dual-write: Always update local
+            data["chapters"][chapter["id"]] = chapter
+            self._save_local(data)
+            
+            # Dual-write: Always update Mongo
+            if self.use_mongo:
+                try:
+                    self.db.chapters.replace_one({"id": chapter["id"]}, chapter, upsert=True)
+                except Exception as e:
+                    print(f"[DB Mongo save_chapter error] {e}")
+            return chapter
 
     def delete_chapter(self, chapter_id: str) -> bool:
         data = self._load_local()
@@ -365,17 +379,25 @@ class DatabaseService:
         return page
 
     def _sync_chapter_from_pages(self, chapter_id: str):
-        chapter = self.get_chapter(chapter_id)
-        if not chapter:
-            return
-        pages = self.get_pages(chapter_id)
-        if pages:
-            non_empty_pages = [p.get("content", "") for p in pages if p.get("content") and p.get("content").strip() not in ["", "<p><br></p>"]]
-            if non_empty_pages:
-                combined_content = "<!-- story-page-break -->".join(non_empty_pages)
-                chapter["content"] = combined_content
-            chapter["pages"] = pages
-            self.save_chapter(chapter)
+        with lock:
+            data = self._load_local()
+            chapter = data.get("chapters", {}).get(chapter_id)
+            if not chapter:
+                return
+            pages = self.get_pages(chapter_id)
+            if pages:
+                non_empty_pages = [p.get("content", "") for p in pages if p.get("content") and p.get("content").strip() not in ["", "<p><br></p>"]]
+                if non_empty_pages:
+                    chapter["content"] = "<!-- story-page-break -->".join(non_empty_pages)
+                chapter["pages"] = pages
+                chapter["word_count"] = len(chapter.get("content", "").split())
+                chapter["updated_at"] = datetime.utcnow().isoformat()
+                self._save_local(data)
+                if self.use_mongo:
+                    try:
+                        self.db.chapters.replace_one({"id": chapter["id"]}, chapter, upsert=True)
+                    except Exception as e:
+                        print(f"[DB Mongo _sync_chapter_from_pages error] {e}")
 
     def delete_page(self, chapter_id: str, page_id: str) -> bool:
         data = self._load_local()

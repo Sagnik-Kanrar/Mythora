@@ -22,6 +22,11 @@ def create_chapter(data: ChapterCreate, story_id: str = None):
     data_dict["story_id"] = sid
     if not data_dict.get("chapter_number"):
         data_dict["chapter_number"] = data_dict.get("order") or 1
+    # Ensure title is trimmed and has valid fallback if empty
+    title = (data_dict.get("title") or "").strip()
+    if not title:
+        title = f"Chapter {data_dict.get('chapter_number', 1)} - The Unfolding Incident"
+    data_dict["title"] = title
     data_dict["id"] = f"chap_{uuid.uuid4().hex[:10]}"
     saved = db_service.save_chapter(data_dict)
     # Immediately index new chapter into ChromaDB semantic store
@@ -53,6 +58,19 @@ def update_chapter(chapter_id: str, data: ChapterUpdate):
         if (incoming_c == "" or incoming_c == "<p><br></p>") and (existing_c != "" and existing_c != "<p><br></p>"):
             # Preserve existing prose
             update_data.pop("content")
+
+    # Title protection:
+    # 1. Clean whitespace
+    # 2. Never allow empty/blank title to overwrite an existing valid title
+    if "title" in update_data:
+        incoming_t = update_data["title"].strip()
+        existing_t = (existing.get("title") or "").strip()
+        if not incoming_t and existing_t:
+            update_data.pop("title")
+        elif incoming_t:
+            update_data["title"] = incoming_t
+        elif not existing_t:
+            update_data["title"] = f"Chapter {existing.get('chapter_number', 1)}"
 
     # If pages are provided, also persist them individually
     if "pages" in update_data and update_data["pages"]:
