@@ -14,7 +14,7 @@ def cowriter_assistance(payload: Dict[str, Any]):
     content = payload.get("content", "")
     chapter_title = payload.get("chapter_title", "Active Scene")
     character_notes = payload.get("character_notes", "")
-    instruction = payload.get("instruction", "")
+    instruction = (payload.get("instruction") or "").strip()
     
     # 1. Fetch full story universe specifications
     story = db_service.get_story(story_id) if story_id else None
@@ -31,8 +31,8 @@ def cowriter_assistance(payload: Dict[str, Any]):
     # 5. Fetch persistent lore memories
     all_mems = db_service.get_memories(story_id) if story_id else []
     
-    # Semantic search across both memories AND prior chapter texts
-    query_text = f"{content[-600:]} {instruction}".strip()
+    # Semantic search prioritizing author's instruction and recent manuscript text
+    query_text = f"{instruction} {content[-400:]}".strip() if instruction else content[-600:].strip()
     relevant_memories = vector_service.search_memories(
         query=query_text,
         memories=all_mems,

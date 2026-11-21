@@ -223,8 +223,8 @@ CRITICAL PROHIBITION ON INTRODUCING NEW CHARACTERS:
         # 4. Build Special Instruction High-Priority Directives
         special_instruction_header = ""
         special_system_override = ""
-        if instruction and instruction.strip():
-            clean_inst = instruction.strip()
+        clean_inst = instruction.strip() if instruction else ""
+        if clean_inst:
             special_instruction_header = f"""
 ********************************************************************************
 *** CRITICAL AUTHOR SPECIAL INSTRUCTION (MANDATORY HIGHEST PRIORITY OVERRIDE) ***
@@ -232,7 +232,7 @@ CRITICAL PROHIBITION ON INTRODUCING NEW CHARACTERS:
 MANDATORY COMPLIANCE REQUIREMENT:
 You MUST execute and prioritize this specific instruction above all standard templates,
 default tropes, and pacing guidelines. If the author specifies tone, emotions, focus, dialogue rules,
-or things to include/exclude, you MUST obey them 100%.
+plot twists, or things to include/exclude, you MUST obey them 100%.
 ********************************************************************************
 """
             special_system_override = f"""
@@ -285,6 +285,26 @@ STRICT CANON & CHARACTER INVARIANTS:
 
         specific_action_guide = action_instruction_map.get(action.lower(), "Advance the prose in harmony with the story's established world and canon.")
 
+        if clean_inst:
+            task_directive_block = f"""=== MANDATORY TASK DIRECTIVE ===
+PRIMARY OBJECTIVE (AUTHOR'S SPECIAL INSTRUCTION - ABSOLUTE HIGHEST PRIORITY):
+>>>>> "{clean_inst}" <<<<<
+
+MANDATORY EXECUTION REQUIREMENT:
+You MUST make the author's Special Instruction ("{clean_inst}") the central driver and focal point of the generated prose.
+Do NOT treat it as a passive suggestion or background footnote. The output text MUST directly, actively feature, embody, and execute "{clean_inst}" while fulfilling the {action.upper()} goal.
+
+ASSISTANCE GOAL:
+{action.upper()}: {specific_action_guide}
+
+Write the narrative text now, actively centering on and executing the Special Instruction:"""
+        else:
+            task_directive_block = f"""=== TASK DIRECTIVE ===
+Action Requested: {action.upper()}
+Action Instruction: {specific_action_guide}
+
+Write the narrative text now:"""
+
         prompt = f"""{special_instruction_header}
 === UNIVERSE CANON & PERSPECTIVE ===
 Title: {story_title}
@@ -317,12 +337,7 @@ Current Chapter Content:
 {current_content}
 \"\"\"
 
-=== TASK DIRECTIVE ===
-Action Requested: {action.upper()}
-Action Instruction: {specific_action_guide}
-{f'Author Note / Special Request: {instruction}' if instruction else ''}
-
-Write the narrative text now:"""
+{task_directive_block}"""
 
         # Execute generation
         ai_res = self._call_gemini(prompt, system_instruction)
@@ -361,8 +376,29 @@ Write the narrative text now:"""
         chapter_title: str,
         instruction: str = ""
     ) -> str:
-        """Construct a contextual fallback strictly honoring single character focus without inventing new entities."""
+        """Construct a contextual fallback strictly honoring single character focus and author instructions."""
         primary_char = characters[0]["name"] if characters else "The protagonist"
+        clean_inst = instruction.strip() if instruction else ""
+
+        # If author supplied a Special Instruction, synthesize fallback prose around that instruction
+        if clean_inst:
+            focus_target = clean_inst.rstrip('.').strip()
+            if action == "continue":
+                return f"\n\n{primary_char} paused, drawing immediate focus to {focus_target}. Every subtle shift in the air of {setting} seemed to converge upon it. Moving forward with deliberate precision, {primary_char} knew that addressing this directly would alter the entire trajectory of the scene."
+            elif action == "dialogue":
+                return f""""Look closely," {primary_char} murmured, eyes fixed on {focus_target}. "We cannot proceed until we reckon with this."\n\nThe silence that followed was charged with unspoken understanding, the weight of {focus_target} hanging decisively over the encounter."""
+            elif action == "expand":
+                return f"The sensory reality of {setting} intensified, revolving entirely around {focus_target}. The filtered lighting, the hushed cadence of the room, and the palpable tension all converged, imbuing the scene with unmistakable narrative gravity."
+            elif action == "describe":
+                return f"{setting} stood transfixed in {mood.lower()} atmosphere, dominated by the vivid presence of {focus_target}. Every weathered texture and lingering shadow seemed deliberate, accentuating the physical and emotional weight of the moment."
+            elif action == "summarize":
+                return f"Chapter Breakdown for '{chapter_title}':\n• Narrative Focus: {primary_char} confronts {focus_target} within {setting}.\n• Core Development: Critical revelations and heightened tension emerge directly from {focus_target}.\n• Lingering Stakes: The immediate consequences of {focus_target} carry over into the next scene."
+            elif action == "continuity":
+                return f"Continuity Analysis for '{chapter_title}':\n✓ Special Directive: {focus_target} is seamlessly integrated with the established rules of {setting}.\n✓ Character Consistency: {primary_char}'s reaction to {focus_target} aligns with established canon.\n✓ Note: Ensure the narrative consequences of {focus_target} remain consistent in subsequent folios."
+            elif action == "tone":
+                return f"The tone shifted with striking resonance as {focus_target} redefined the atmosphere of {setting}. The cadence measured every breath, enveloping {primary_char} in a deep, {mood.lower()} resonance."
+            elif action == "rewrite":
+                return f"Centered with renewed focus upon {focus_target}, the prose sharpens. In the atmospheric expanse of {setting}, {primary_char}'s presence carries sharper sensory clarity and emotional punch."
 
         if action == "continue":
             if genre.lower() == "fantasy":

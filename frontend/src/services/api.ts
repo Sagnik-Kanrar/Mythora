@@ -1227,9 +1227,10 @@ class ApiService {
         body: JSON.stringify(payload),
       });
     } catch {
+      const extraInst = payload.instruction ? ` Bearing down with acute focus on ${payload.instruction.trim().replace(/\.$/, '')}, every instinct demanded immediate resolution.` : '';
       return {
-        generated_text: `The amber lamp flickered as rain hammered the high gothic window. Detective Julian Vance turned the heavy brass key inside the desk lock. The mechanism clicked with an authoritative shudder, parting the aged rosewood drawer to reveal the wax-sealed dispatch from Ravenscar. Every instinct warned him not to break the seal, but in this room, hesitation was the only fatal mistake.`,
-        engine: "Google Gemini 1.5 Flash (Local Studio Fallback)",
+        generated_text: `The amber lamp flickered as rain hammered the high gothic window. Detective Julian Vance turned the heavy brass key inside the desk lock.${extraInst} The mechanism clicked with an authoritative shudder, parting the aged rosewood drawer to reveal the wax-sealed dispatch from Ravenscar. Every instinct warned him not to break the seal, but in this room, hesitation was the only fatal mistake.`,
+        engine: "Google Gemini (Studio Adaptive Fallback)",
         injected_memories_count: 2
       };
     }

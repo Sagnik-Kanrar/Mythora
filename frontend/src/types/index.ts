@@ -265,6 +265,7 @@ export interface InvestigationBoardState {
 
 export interface CoWriterPayload {
   story_id: string;
+  chapter_id?: string;
   action: 'continue' | 'dialogue' | 'expand' | 'describe' | 'tone' | 'summarize' | 'continuity' | 'rewrite';
   content: string;
   chapter_title: string;

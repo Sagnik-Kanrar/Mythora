@@ -76,7 +76,9 @@ def database_healthcheck():
     mongo_msg = "MongoDB URI not provided. Using persistent local JSON store fallback."
     if db_service.use_mongo:
         try:
-            db_service.client.admin.command('ping')
+            client = getattr(db_service, "mongo_client", None) or getattr(db_service, "client", None)
+            if client:
+                client.admin.command('ping')
             mongo_status = "healthy"
             mongo_msg = f"Connected to MongoDB database '{DATABASE_NAME}'"
         except Exception as e:

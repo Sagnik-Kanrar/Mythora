@@ -780,11 +780,12 @@ export const WritingStudio: React.FC = () => {
       const plainContent = stripHtml(content) || content;
       const res = await api.askCoWriter({
         story_id: activeStory.id,
+        chapter_id: selectedChapter.id,
         action: aiAction as any,
         content: plainContent,
         chapter_title: title,
         character_notes: selectedCharacterNote,
-        instruction: customInstruction,
+        instruction: customInstruction.trim(),
       });
 
       setAiOutput(res.generated_text);
@@ -1324,6 +1325,12 @@ export const WritingStudio: React.FC = () => {
                     type="text"
                     value={customInstruction}
                     onChange={(e) => setCustomInstruction(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isGenerating) {
+                        e.preventDefault();
+                        handleRunCoWriter();
+                      }
+                    }}
                     placeholder="e.g. Focus on the sea mist and tension..."
                     className="w-full bg-[#130F0D] border border-[#2E241C] text-[#EDE3D6] text-xs sm:text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-[#C49A61]/60 placeholder:text-[#6E5D4E]"
                   />
