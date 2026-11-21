@@ -1,0 +1,26 @@
+{
+  "name": "Mythora — Investigative Storytelling Studio",
+  "short_name": "Mythora",
+  "description": "Tactical AI authoring and narrative world-building platform inspired by investigative journals and evidence boards.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#11100F",
+  "theme_color": "#11100F",
+  "categories": ["books", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
