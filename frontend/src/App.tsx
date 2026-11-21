@@ -23,6 +23,7 @@ const IntelligenceDashboard = React.lazy(() => import('./pages/IntelligenceDashb
 const ArchiveManualModal = React.lazy(() => import('./components/manual/ArchiveManualModal').then(m => ({ default: m.ArchiveManualModal })));
 const SettingsModal = React.lazy(() => import('./components/common/SettingsModal').then(m => ({ default: m.SettingsModal })));
 const PacingAlertModal = React.lazy(() => import('./components/common/PacingAlertModal').then(m => ({ default: m.PacingAlertModal })));
+const SubscriptionModal = React.lazy(() => import('./components/subscription/SubscriptionModal').then(m => ({ default: m.SubscriptionModal })));
 
 // Gothic themed chamber loading indicator
 const ChamberLoadingFallback: React.FC = () => (
@@ -95,6 +96,11 @@ class AppErrorBoundary extends React.Component<{ children: React.ReactNode }, { 
 const MainContent: React.FC = () => {
   const { user, loading, isRestoringSession, openAuthModal } = useAuth();
   const [manualOpen, setManualOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('subscription') === 'true' || params.get('tab') === 'subscription';
+  });
   const prevUserRef = useRef<any>(undefined);
 
   const [currentTab, setCurrentTab] = useState<NavTab>(() => {
@@ -373,6 +379,8 @@ const MainContent: React.FC = () => {
         onSelectTab={(tab) => handleNavigate(tab)}
         onOpenSettings={() => setSettingsOpen(false)}
         onOpenManual={() => setManualOpen(true)}
+        isSubscriptionOpen={subscriptionOpen}
+        onOpenSubscription={() => setSubscriptionOpen(true)}
       />
 
       {/* Main Investigation Stage with Lazy Code Splitting */}
@@ -422,6 +430,12 @@ const MainContent: React.FC = () => {
           <ArchiveManualModal
             isOpen={manualOpen}
             onClose={() => setManualOpen(false)}
+          />
+        )}
+        {subscriptionOpen && (
+          <SubscriptionModal
+            isOpen={subscriptionOpen}
+            onClose={() => setSubscriptionOpen(false)}
           />
         )}
       </React.Suspense>

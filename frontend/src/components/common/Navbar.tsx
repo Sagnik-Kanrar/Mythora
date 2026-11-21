@@ -18,7 +18,8 @@ import {
   Plus,
   LogOut,
   LogIn,
-  UserPlus
+  UserPlus,
+  Crown
 } from 'lucide-react';
 
 export type NavTab = 
@@ -37,12 +38,16 @@ interface NavbarProps {
   onSelectTab: (tab: NavTab) => void;
   onOpenSettings?: () => void;
   onOpenManual?: () => void;
+  isSubscriptionOpen?: boolean;
+  onOpenSubscription?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onSelectTab,
   onOpenManual,
+  isSubscriptionOpen,
+  onOpenSubscription,
 }) => {
   const { stories, activeStory, setActiveStoryId } = useStory();
   const { user, profile, openAuthModal, signOutUser } = useAuth();
@@ -118,6 +123,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'plotholes', label: 'Investigation Board', icon: AlertTriangle, badge: 'AI' },
     { id: 'studio', label: 'Writing Studio', icon: PenTool, badge: null },
     { id: 'intelligence', label: 'Intelligence', icon: Activity, badge: null },
+    { id: 'subscription', label: 'Subscription', icon: Crown, badge: 'PRO' },
   ];
 
   return (
@@ -227,8 +233,31 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right: Manual & Storyteller Profile */}
+        {/* Right: Subscription, Manual & Storyteller Profile */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {/* Subscription Plans Trigger */}
+          {onOpenSubscription && (
+            <button
+              type="button"
+              onClick={() => {
+                sound.playPaperRustle();
+                onOpenSubscription();
+              }}
+              className={`h-10 sm:h-11 px-3 sm:px-4 rounded-lg border transition-all font-sans text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 shrink-0 group cursor-pointer ${
+                isSubscriptionOpen
+                  ? 'bg-[#C49A61]/25 text-[#F3D4A0] border-[#C49A61] ring-1 ring-[#C49A61]/50'
+                  : 'bg-[#1D1713] border-[#382E25] hover:border-[#C49A61]/80 text-[#B8A796] hover:text-[#F3D4A0]'
+              }`}
+              title="Open Subscription Plans & Membership Tiers"
+            >
+              <Crown className={`w-4 h-4 text-[#C49A61] group-hover:scale-110 transition-transform shrink-0 ${isSubscriptionOpen ? 'animate-pulse' : ''}`} />
+              <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Subscription</span>
+              <span className="hidden md:inline text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#C49A61]/20 text-[#E5BA78] border border-[#C49A61]/40 ml-0.5 uppercase">
+                Tiers
+              </span>
+            </button>
+          )}
+
           {/* Codex Manual Guidebook Trigger */}
           {onOpenManual && (
             <button
@@ -291,6 +320,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                         {profile?.authProvider === 'google' ? 'Google Account' : 'Archive Credential'}
                       </span>
                     </div>
+
+                    {onOpenSubscription && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sound.playPaperRustle();
+                          setUserMenuOpen(false);
+                          onOpenSubscription();
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-[#241B14] hover:bg-[#34261C] text-[#E0B77D] hover:text-[#F3D4A0] border border-[#C49A61]/30 font-sans text-xs font-semibold transition-colors flex items-center justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Crown className="w-3.5 h-3.5 text-[#C49A61]" />
+                          <span>Subscription Plans</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-[#E5BA78] bg-[#C49A61]/20 px-1.5 py-0.5 rounded uppercase">
+                          Tiers
+                        </span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -368,7 +417,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = currentTab === item.id;
+              const isActive = item.id === 'subscription' ? !!isSubscriptionOpen : currentTab === item.id;
 
               return (
                 <button
@@ -377,7 +426,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                   data-active={isActive ? 'true' : 'false'}
                   onClick={() => {
                     sound.playPaperRustle();
-                    onSelectTab(item.id as NavTab);
+                    if (item.id === 'subscription') {
+                      onOpenSubscription?.();
+                    } else {
+                      onSelectTab(item.id as NavTab);
+                    }
                   }}
                   className={`group relative h-12 sm:h-[50px] px-4 sm:px-5 md:px-5 rounded-t-lg transition-all font-sans text-sm sm:text-[15px] md:text-base whitespace-nowrap flex items-center gap-2.5 shrink-0 ${
                     isActive
