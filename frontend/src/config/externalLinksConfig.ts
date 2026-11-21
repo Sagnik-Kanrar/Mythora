@@ -13,13 +13,13 @@ export const EXTERNAL_LINKS: Record<'imagine' | 'digitize', ExternalLinkItem> = 
   imagine: {
     id: 'imagine',
     label: 'Imagine',
-    url: 'https://imagine.art',
+    url: 'https://collectmangadataset.vercel.app/',
     description: 'Generative AI Visual Storyboards & Conceptual Artwork'
   },
   digitize: {
     id: 'digitize',
     label: 'Digitize',
-    url: 'https://digitize.ai',
+    url: 'https://manuscript-ai-two.vercel.app/',
     description: 'Manuscript Digitization & Archival Processing'
   }
 };
