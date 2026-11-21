@@ -19,8 +19,12 @@ import {
   LogOut,
   LogIn,
   UserPlus,
-  Crown
+  Crown,
+  Sparkles,
+  Scan,
+  ExternalLink
 } from 'lucide-react';
+import { EXTERNAL_LINKS } from '../../config/externalLinksConfig';
 
 export type NavTab = 
   | 'home'
@@ -233,8 +237,38 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Right: Subscription, Manual & Storyteller Profile */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Right: External Tools, Subscription, Manual & Storyteller Profile */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Imagine External Link */}
+          <button
+            type="button"
+            onClick={() => {
+              sound.playPaperRustle();
+              window.open(EXTERNAL_LINKS.imagine.url, '_blank', 'noopener,noreferrer');
+            }}
+            className="h-10 sm:h-11 px-2.5 sm:px-3 rounded-lg bg-[#1D1713] border border-[#382E25] hover:border-[#C49A61]/80 text-[#B8A796] hover:text-[#F3D4A0] transition-all font-sans text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 shrink-0 group cursor-pointer"
+            title={`${EXTERNAL_LINKS.imagine.label}: ${EXTERNAL_LINKS.imagine.description} (Opens ${EXTERNAL_LINKS.imagine.url})`}
+          >
+            <Sparkles className="w-4 h-4 text-[#C49A61] group-hover:scale-110 group-hover:text-[#F3D4A0] transition-all shrink-0" />
+            <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Imagine</span>
+            <ExternalLink className="w-3 h-3 text-[#78695A] group-hover:text-[#C49A61] transition-colors shrink-0 hidden md:inline" />
+          </button>
+
+          {/* Digitize External Link */}
+          <button
+            type="button"
+            onClick={() => {
+              sound.playPaperRustle();
+              window.open(EXTERNAL_LINKS.digitize.url, '_blank', 'noopener,noreferrer');
+            }}
+            className="h-10 sm:h-11 px-2.5 sm:px-3 rounded-lg bg-[#1D1713] border border-[#382E25] hover:border-[#C49A61]/80 text-[#B8A796] hover:text-[#F3D4A0] transition-all font-sans text-xs sm:text-sm font-medium shadow-sm flex items-center gap-1.5 shrink-0 group cursor-pointer"
+            title={`${EXTERNAL_LINKS.digitize.label}: ${EXTERNAL_LINKS.digitize.description} (Opens ${EXTERNAL_LINKS.digitize.url})`}
+          >
+            <Scan className="w-4 h-4 text-[#C49A61] group-hover:scale-110 group-hover:text-[#F3D4A0] transition-all shrink-0" />
+            <span className="hidden sm:inline whitespace-nowrap text-sm font-medium">Digitize</span>
+            <ExternalLink className="w-3 h-3 text-[#78695A] group-hover:text-[#C49A61] transition-colors shrink-0 hidden md:inline" />
+          </button>
+
           {/* Subscription Plans Trigger */}
           {onOpenSubscription && (
             <button
@@ -340,6 +374,43 @@ export const Navbar: React.FC<NavbarProps> = ({
                         </span>
                       </button>
                     )}
+
+                    {/* External Studio Quicklinks in Profile Menu */}
+                    <div className="pt-1 border-t border-[#2C2117] space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sound.playPaperRustle();
+                          setUserMenuOpen(false);
+                          window.open(EXTERNAL_LINKS.imagine.url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="w-full py-1.5 px-3 rounded-lg bg-[#19130F] hover:bg-[#281E16] text-[#B8A796] hover:text-[#F3D4A0] border border-[#34261C] font-sans text-xs flex items-center justify-between cursor-pointer"
+                        title={EXTERNAL_LINKS.imagine.description}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Sparkles className="w-3.5 h-3.5 text-[#C49A61]" />
+                          <span>Imagine</span>
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-[#78695A]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          sound.playPaperRustle();
+                          setUserMenuOpen(false);
+                          window.open(EXTERNAL_LINKS.digitize.url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="w-full py-1.5 px-3 rounded-lg bg-[#19130F] hover:bg-[#281E16] text-[#B8A796] hover:text-[#F3D4A0] border border-[#34261C] font-sans text-xs flex items-center justify-between cursor-pointer"
+                        title={EXTERNAL_LINKS.digitize.description}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Scan className="w-3.5 h-3.5 text-[#C49A61]" />
+                          <span>Digitize</span>
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-[#78695A]" />
+                      </button>
+                    </div>
 
                     <button
                       type="button"
